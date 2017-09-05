@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include malco_erpnext *.css
+recursive-include malco_erpnext *.csv
+recursive-include malco_erpnext *.html
+recursive-include malco_erpnext *.ico
+recursive-include malco_erpnext *.js
+recursive-include malco_erpnext *.json
+recursive-include malco_erpnext *.md
+recursive-include malco_erpnext *.png
+recursive-include malco_erpnext *.py
+recursive-include malco_erpnext *.svg
+recursive-include malco_erpnext *.txt
+recursive-exclude malco_erpnext *.pyc
