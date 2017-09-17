@@ -7,6 +7,7 @@ import frappe
 from frappe.model.document import Document
 import dropbox, json
 import html2text
+from time import sleep
 
 from frappe.integrations.doctype.dropbox_settings.dropbox_settings import get_dropbox_settings
 dropbox_settings = get_dropbox_settings()
@@ -28,7 +29,8 @@ def upload_transaction_ts(doctype, docname, pf):
         try:
                 with open(local_url, "rb") as f:
                         upl = dbx.files_upload(f.read(), '{0}{1}.IN'.format(dropbox_io_path, docname), mute = True)
-                return "File uploaded successfully."
+                sleep(10)
+                get_algo_signature(doctype, docname)
         except:
                 return "Upload Failed!!! Something went wrong!!!!"
 
@@ -43,3 +45,11 @@ def get_algo_signature(doctype, docname):
                 return res.content
         except:
                 return "No signature found or Something went wrong!!!!"
+
+def sign_invoice(doc, method):
+        cgroup = frappe.db.get_value("Customer", doc.customer, "customer_group")
+        if cgroup == "Individual":
+                if doc.doctype == "Sales Invoice":
+                        upload_transaction_ts(doc.doctype, doc.name, "MalCo Invoice")
+                elif doc.doctype == "Delivery Note":
+                        upload_transaction_ts(doc.doctype, doc.name, "MalCo Delivery Note")

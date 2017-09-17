@@ -86,6 +86,14 @@ fixtures = ["Custom Field", "Custom Script"]
 # 		"on_trash": "method"
 #	}
 # }
+doc_events = {
+        "Sales Invoice": {
+            "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
+	},
+        "Delivery Note": {
+            "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
+	}
+}
 
 # Scheduled Tasks
 # ---------------
