@@ -11,6 +11,9 @@ app_color = "grey"
 app_email = "contact@goelite.in"
 app_license = "MIT"
 fixtures = ["Custom Field", "Custom Script"]
+
+hide_in_installer = True
+
 # Includes in <head>
 # ------------------
 
