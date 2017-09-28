@@ -8,6 +8,8 @@ from frappe.model.document import Document
 import dropbox, json
 import html2text
 from time import sleep
+from lxml import etree
+import HTMLParser
 
 from frappe.integrations.doctype.dropbox_settings.dropbox_settings import get_dropbox_settings
 dropbox_settings = get_dropbox_settings()
@@ -53,3 +55,22 @@ def sign_invoice(doc, method):
                         upload_transaction_ts(doc.doctype, doc.name, "MalCo Invoice")
                 elif doc.doctype == "Delivery Note":
                         upload_transaction_ts(doc.doctype, doc.name, "MalCo Delivery Note")
+
+@frappe.whitelist()
+def remove_duplicate_tags(project):
+        projdoc = frappe.get_doc("Project", project)
+        html_en = html2text.html2text(projdoc.xml_html)        
+        h = HTMLParser.HTMLParser()
+        xmld = h.unescape(html_en).encode('utf8')
+        root = etree.fromstring(xmld)
+        for crew in root.xpath('.//GOOITEGDS'):
+                i_index = crew.find("IteNumGDS7").text
+                hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
+                for ccrew in crew.xpath('.//PRODOCDC2'):
+                        vdoc = ccrew.find("DocTypDC21").text
+                        for e in projdoc.customs_attachments:
+                                if e.document_code == vdoc:
+                                        if e.hs_code != hs_code:
+                                                ccrew.getparent().remove(ccrew)
+                                                break                                      
+        return etree.tostring(root, pretty_print=True)                        
