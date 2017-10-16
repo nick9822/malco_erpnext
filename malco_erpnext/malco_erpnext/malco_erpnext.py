@@ -65,6 +65,11 @@ def remove_duplicate_tags(project):
         root = etree.fromstring(xmld)
         for crew in root.xpath('.//GOOITEGDS'):
                 i_index = crew.find("IteNumGDS7").text
+                if i_index > 1:
+                        for rcrew in crew.xpath('.//CONNR2'):
+                                rcrew.getparent().remove(rcrew)
+                        for rcrew in crew.xpath('.//CALTAXGOD'):
+                                rcrew.getparent().remove(rcrew)
                 hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
                 for ccrew in crew.xpath('.//PRODOCDC2'):
                         vdoc = ccrew.find("DocTypDC21").text
