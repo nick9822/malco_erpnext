@@ -67,7 +67,9 @@ def remove_duplicate_tags(project):
                 i_index = crew.find("IteNumGDS7").text
                 if int(i_index) > 1:
                         for rcrew in crew.xpath('.//CONNR2'):
-                                rcrew.getparent().remove(rcrew)                        
+                                rcrew.getparent().remove(rcrew)
+                        for rcrew in crew.xpath('.//TAXADDELE100'):
+                                rcrew.getparent().remove(rcrew)
                 hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
                 for ccrew in crew.xpath('.//PRODOCDC2'):
                         vdoc = ccrew.find("DocTypDC21").text
@@ -76,11 +78,12 @@ def remove_duplicate_tags(project):
                                         if e.hs_code != hs_code:
                                                 ccrew.getparent().remove(ccrew)
                                                 break
-                for ccrew in crew.xpath('.//CALTAXGOD'):
+                 for ccrew in crew.xpath('.//CALTAXGOD'):
                         vdoc = ccrew.find("TypOfTaxCTX1").text
+                        vcost = ccrew.find("TaxBasCTX1").text
                         for e in projdoc.customs_duties_analysis:
                                 if e.customs_charges_code == vdoc:
-                                        if e.hs_code != hs_code:
+                                        if e.hs_code == hs_code and e.tax_base != float(vcost):
                                                 ccrew.getparent().remove(ccrew)
                                                 break
         return etree.tostring(root, pretty_print=True)                        
