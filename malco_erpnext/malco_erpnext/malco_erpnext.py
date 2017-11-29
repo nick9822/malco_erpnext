@@ -78,7 +78,7 @@ def remove_duplicate_tags(project):
                                         if e.hs_code != hs_code:
                                                 ccrew.getparent().remove(ccrew)
                                                 break
-                 for ccrew in crew.xpath('.//CALTAXGOD'):
+                for ccrew in crew.xpath('.//CALTAXGOD'):
                         vdoc = ccrew.find("TypOfTaxCTX1").text
                         vcost = ccrew.find("TaxBasCTX1").text
                         for e in projdoc.customs_duties_analysis:
