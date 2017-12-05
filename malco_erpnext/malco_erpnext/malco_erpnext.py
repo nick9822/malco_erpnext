@@ -79,12 +79,12 @@ def remove_duplicate_tags(project):
                                         score = score + 1
                         if score == 0:
                                 ccrew.getparent().remove(ccrew)
-                for ccrew in crew.xpath('.//CALTAXGOD'):
+                for idx, ccrew in enumerate(crew.xpath('.//CALTAXGOD')):
+                        score = 0
                         vdoc = ccrew.find("TypOfTaxCTX1").text
-                        vcost = ccrew.find("TaxBasCTX1").text
-                        for e in projdoc.customs_duties_analysis:
-                                if e.customs_charges_code == vdoc:
-                                        if e.hs_code == hs_code and e.tax_base != float(vcost):
-                                                ccrew.getparent().remove(ccrew)
-                                                break
+                        for idxx, e in enumerate(projdoc.customs_duties_analysis):
+                                if e.customs_charges_code == vdoc and e.hs_code == hs_code and idx == idxx:
+                                        score = score + 1
+                        if score == 0:
+                                ccrew.getparent().remove(ccrew)
         return etree.tostring(root, pretty_print=True)                        
