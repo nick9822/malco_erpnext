@@ -71,19 +71,20 @@ def remove_duplicate_tags(project):
                         for rcrew in crew.xpath('.//TAXADDELE100'):
                                 rcrew.getparent().remove(rcrew)
                 hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
-                for ccrew in crew.xpath('.//PRODOCDC2'):
+                for idx, ccrew in enumerate(crew.xpath('.//PRODOCDC2')):
+                        score = 0
                         vdoc = ccrew.find("DocTypDC21").text
-                        for e in projdoc.customs_attachments:
-                                if e.document_code == vdoc:
-                                        if e.hs_code != hs_code:
-                                                ccrew.getparent().remove(ccrew)
-                                                break
-                for ccrew in crew.xpath('.//CALTAXGOD'):
+                        for idxx, e in enumerate(projdoc.customs_attachments):
+                                if e.document_code == vdoc and e.hs_code == hs_code and idx == idxx:
+                                        score = score + 1
+                        if score == 0:
+                                ccrew.getparent().remove(ccrew)
+                for idx, ccrew in enumerate(crew.xpath('.//CALTAXGOD')):
+                        score = 0
                         vdoc = ccrew.find("TypOfTaxCTX1").text
-                        vcost = ccrew.find("TaxBasCTX1").text
-                        for e in projdoc.customs_duties_analysis:
-                                if e.customs_charges_code == vdoc:
-                                        if e.hs_code == hs_code and e.tax_base != float(vcost):
-                                                ccrew.getparent().remove(ccrew)
-                                                break
+                        for idxx, e in enumerate(projdoc.customs_duties_analysis):
+                                if e.customs_charges_code == vdoc and e.hs_code == hs_code and idx == idxx:
+                                        score = score + 1
+                        if score == 0:
+                                ccrew.getparent().remove(ccrew)
         return etree.tostring(root, pretty_print=True)                        
