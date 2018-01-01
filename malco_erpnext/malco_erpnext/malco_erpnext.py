@@ -88,3 +88,8 @@ def remove_duplicate_tags(project):
                         if score == 0:
                                 ccrew.getparent().remove(ccrew)
         return etree.tostring(root, pretty_print=True)                        
+
+@frappe.whitelist()
+def delete_doc_force(doctype, name):
+        res = frappe.delete_doc(doctype, name, force=1)
+        return res
