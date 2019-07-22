@@ -1,0 +1,30 @@
+{
+ "add_total_row": 0, 
+ "apply_user_permissions": 1, 
+ "creation": "2018-04-10 23:32:48.001200", 
+ "disabled": 0, 
+ "docstatus": 0, 
+ "doctype": "Report", 
+ "idx": 0, 
+ "is_standard": "Yes", 
+ "letter_head": "Malco Letter Head GR", 
+ "modified": "2018-04-10 23:32:48.001200", 
+ "modified_by": "Administrator", 
+ "module": "Malco-ERPNext", 
+ "name": "MalCo Profit and Loss Statement", 
+ "owner": "Administrator", 
+ "ref_doctype": "GL Entry", 
+ "report_name": "MalCo Profit and Loss Statement", 
+ "report_type": "Script Report", 
+ "roles": [
+  {
+   "role": "Accounts User"
+  }, 
+  {
+   "role": "Accounts Manager"
+  }, 
+  {
+   "role": "Auditor"
+  }
+ ]
+}

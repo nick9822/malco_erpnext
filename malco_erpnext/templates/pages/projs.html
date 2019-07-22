@@ -1,0 +1,48 @@
+{% extends "templates/web.html" %}
+
+{% block title %}Projects{% endblock %}
+
+{% block header %}
+{% endblock %}
+
+{% block style %}
+	<style>
+		{% include "malco_erpnext/templates/pages/slick.grid.css" %}
+		{% include "malco_erpnext/templates/pages/slickgrid.css" %}
+	</style>
+	<style>
+		.page-content.without-sidebar{
+			border-left: lightgray solid 0.5px;
+	    	border-right: lightgray solid 0.5px;
+	    }
+	</style>
+{% endblock %}
+
+
+{% block page_content %}
+<div class="row">
+		<div class="col-xs-12">
+			<div class="col-xs-6">
+				<h1>Projects</h1>
+			</div>
+			<div class="col-xs-6 text-right">
+				<a class="btn btn-default btn-sm" id="refresh"><span class="glyphicon glyphicon-refresh"></span> Refresh</a>
+				<a class="btn btn-primary btn-sm primary-action" id="downloadLink"><i class="fa fa-file-excel-o"> Export to Excel</i></a>
+			</div>
+		</div>
+	</div>
+ <div class="row">
+	<div class="col-xs-12" id="gridParent" style="min-height: 500px;">
+ 	</div>
+ </div>
+<script src="/assets/frappe/js/lib/jquery/jquery.min.js"></script>
+<!-- <script>
+	{% include "malco_erpnext/templates/pages/dist/js/require.js" %}
+	{% include "malco_erpnext/templates/pages/dist/js/underscore.js" %}
+	{% include "malco_erpnext/templates/pages/dist/js/jquery.slickgrid.export.excel.js" %}
+	{% include "malco_erpnext/templates/pages/projs.js" %}
+</script> -->
+
+<script>
+</script>
+{% endblock %}

@@ -101,6 +101,11 @@ doc_events = {
 # Scheduled Tasks
 # ---------------
 
+scheduler_events = {
+        "daily": [
+                "malco_erpnext.malco_erpnext.malco_erpnext.complete_dn"
+        ]
+}
 # scheduler_events = {
 # 	"all": [
 # 		"malco_erpnext.tasks.all"
