@@ -6,6 +6,7 @@ from __future__ import unicode_literals
 
 import frappe, os, copy, json, re
 from frappe import _
+import io
 
 from frappe.model.document import Document
 import dropbox, json, requests
@@ -13,6 +14,7 @@ import html2text
 from time import sleep
 from lxml import etree
 import HTMLParser
+import shutil
 
 from frappe.modules import get_doc_path
 from jinja2 import TemplateNotFound
@@ -30,6 +32,7 @@ dropbox_io_path = frappe.db.get_value("Dropbox Settings", None, "dropbox_io_path
 
 @frappe.whitelist()
 def upload_transaction_ts(doctype, docname, pf):
+        return "Disabled"
         dropbox_token = frappe.db.get_value("Dropbox Settings", None, "dropbox_access_token")
         local_url = "{0}{1}.txt".format(local_io_path, docname)
         f= open(local_url,"w+")
@@ -49,12 +52,14 @@ def upload_transaction_ts(doctype, docname, pf):
 
 @frappe.whitelist()
 def get_algo_signature(doctype, docname):
+        return "Disabled"
         dropbox_token = frappe.db.get_value("Dropbox Settings", None, "dropbox_access_token")
         dbx = dropbox.Dropbox(dropbox_settings['access_token'])
         conn = dbx.users_get_current_account()
         try:
                 metadata, res = dbx.files_download(path='{0}{1}.OUT'.format(dropbox_io_path, docname))
                 frappe.db.set_value(doctype, docname, "algobox_signature", res.content)
+                frappe.db.commit()
                 return res.content
         except:
                 return "No signature found or Something went wrong!!!!"
@@ -323,3 +328,267 @@ def payment_via_journal_entry(document_type, document_name, journal_entry):
         else:
                 frappe.throw("Journal Entry is not identified with the party or the amount in the Journal Entry is less than document's total. Please check Pay To / Recd From in the Journal Entry")
         
+@frappe.whitelist()
+def mark_invoice_as_paid(document_type, document_name):
+        update_doc = frappe.get_doc(document_type, document_name)
+
+        if document_type == "Purchase Invoice" and update_doc.outstanding_amount > 0:
+                update_doc.is_paid = 1
+                update_doc.outstanding_amount = 0
+                update_doc.paid_amount = update_doc.base_grand_total
+                update_doc.flags.ignore_validate_update_after_submit = True
+                update_doc.save()
+                frappe.db.commit()
+                return "Success"
+        elif document_type == "Sales Invoice" and update_doc.outstanding_amount > 0:
+                update_doc.is_paid = 1
+                update_doc.outstanding_amount = 0
+                update_doc.paid_amount = update_doc.base_grand_total
+                update_doc.flags.ignore_validate_update_after_submit = True
+                update_doc.save()
+                frappe.db.commit()
+                return "Success"
+        else:
+                frappe.throw("Outstanding amount should be greater than zero")
+
+@frappe.whitelist()
+def override_pe_get_employee_details():
+        from erpnext.hr.doctype.payroll_entry.payroll_entry import PayrollEntry
+        PayrollEntry.get_emp_list = ord_get_emp_list
+        return "Overriden"
+
+def ord_get_emp_list(self):
+        """
+                Returns list of active employees based on selected criteria
+                and for which salary structure exists
+        """
+        cond = self.get_filter_condition()
+        cond += self.get_joining_releiving_condition()
+
+        condition = ''
+        if self.payroll_frequency:
+                condition = """and payroll_frequency = '%(payroll_frequency)s'"""% {"payroll_frequency": self.payroll_frequency}
+
+        sal_condition = ""
+
+        if self.salary_structure:
+                sal_condition = "name='{0}' and ".format(self.salary_structure)
+
+        sal_struct = frappe.db.sql("""
+                        select
+                                name from `tabSalary Structure`
+                        where
+                                {sal_condition}
+                                docstatus != 2 and
+                                is_active = 'Yes'
+                                and company = %(company)s and
+                                ifnull(salary_slip_based_on_timesheet,0) = %(salary_slip_based_on_timesheet)s
+                                {condition}""".format(condition=condition, sal_condition=sal_condition),
+                                {"company": self.company, "salary_slip_based_on_timesheet":self.salary_slip_based_on_timesheet})
+
+        if sal_struct:
+                cond += "and t2.parent IN %(sal_struct)s "
+                emp_list = frappe.db.sql("""
+                        select
+                                t1.name as employee, t1.employee_name, t1.department, t1.designation
+                        from
+                                `tabEmployee` t1, `tabSalary Structure Employee` t2
+                        where
+                                t1.docstatus!=2
+                                and t1.name = t2.employee
+                %s """% cond, {"sal_struct": sal_struct}, as_dict=True)
+                return emp_list
+
+def return_invoice(doctype, name):
+        if doctype == "Sales Invoice":
+                from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
+                docsin = make_sales_return(name)
+                docsin.submit()
+                frappe.db.commit()
+        elif doctype == "Delivery Note":
+                from erpnext.stock.doctype.delivery_note.delivery_note import make_sales_return
+                docsin = make_sales_return(name)
+                docsin.submit()
+                frappe.db.commit()
+
+def close_open_siv_so():
+        pending_so = frappe.get_list("Sales Order", filters=[["status", "in", ["To Deliver and Bill", "To Bill",  "To Deliver"]]])
+        pending_sinv = frappe.get_list("Sales Invoice", filters=[["status", "in", ["Unpaid", "Overdue"]]])
+
+        for e in pending_so:
+                if frappe.db.get_value("Project", e.project_reference, "erp_status") == "Closed":
+                        frappe.db.set_value("Sales Order", e.name, "status", "Closed")
+                        return e.name, "Closed"
+
+        for e in pending_sinv:
+                if frappe.db.get_value("Project", e.project_reference, "erp_status") == "Closed":
+                        mark_invoice_as_paid("Sales Invoice", e.name)
+                        return e.name, "Paid"
+        
+        frappe.db.commit()
+
+@frappe.whitelist()
+def create_file_to_sign_frm_json(doc, method, recreate=0):
+        # VAT (issuer) ; Invoice Series ;  Invoice No. ; Date (yyyy-mm-dd) ; Customer VAT number ; Customer Name ; Customer Address ; 
+        # Customer City ;  Customer Post Code ; Office Payment (only our payment in euro e.g. 200.00) ; 
+        # VAT (Vat for our payment only e.g. 48.00) ; Total of all other expenses.
+        docJson = json.loads(doc)
+        doc = frappe._dict(docJson)
+
+        if doc.mydata_infile_created == 1 and recreate == 0:
+                frappe.msgprint("MyData file is already created")
+                return
+
+        company_vat_id = frappe.db.get_value("Company", doc.company, "tax_id")
+        customer_tax_id = frappe.db.get_value("Customer", doc.customer, "tax_id")
+        customer_address = frappe.get_doc("Address", doc.customer_address)
+
+        fee = 0
+        vat = 0
+        total_other_exp = 0
+        for e in doc.quotation_data:
+                e = frappe._dict(e)
+                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees":
+                        fee = e.billing_value
+                        vat = e.vat_value
+                else: 
+                        total_other_exp += e.total_billing_value
+
+
+        strwr = company_vat_id+";"+doc.naming_series+";"+doc.name+";"+str(doc.posting_date)+";"+customer_tax_id+";"+doc.customer_name+";"
+        strwr += (customer_address.address_line1 or "" ) + ";"+ (customer_address.city or "") +";"+ (customer_address.pincode or "") +";"
+        strwr += str(fee)+";"+str(vat)+";"+str(total_other_exp)+";"
+
+        with open("invoices_for_komvos_sign/"+doc.name+".txt", 'w') as f:
+                f.write(strwr.encode('utf-8'))
+        
+        frappe.db.set_value("Sales Invoice", doc.name, "mydata_infile_created", 1)
+        frappe.db.commit()
+        frappe.msgprint("MyData file is created")
+
+@frappe.whitelist()
+def create_file_to_sign(doc, method):
+        # VAT (issuer) ; Invoice Series ;  Invoice No. ; Date (yyyy-mm-dd) ; Customer VAT number ; Customer Name ; Customer Address ; 
+        # Customer City ;  Customer Post Code ; Office Payment (only our payment in euro e.g. 200.00) ; 
+        # VAT (Vat for our payment only e.g. 48.00) ; Total of all other expenses.
+        company_vat_id = frappe.db.get_value("Company", doc.company, "tax_id")
+        customer_tax_id = frappe.db.get_value("Customer", doc.customer, "tax_id")
+        customer_address = frappe.get_doc("Address", doc.customer_address)
+
+        fee = 0
+        vat = 0
+        total_other_exp = 0
+        for e in doc.quotation_data:
+                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees":
+                        fee = e.billing_value
+                        vat = e.vat_value
+                else: 
+                        total_other_exp += e.total_billing_value
+
+
+        strwr = company_vat_id+";"+doc.naming_series+";"+doc.name+";"+str(doc.posting_date)+";"+customer_tax_id+";"+doc.customer_name+";"
+        strwr += (customer_address.address_line1 or "" ) + ";"+ (customer_address.city or "") +";"+ (customer_address.pincode or "") +";"
+        strwr += str(fee)+";"+str(vat)+";"+str(total_other_exp)+";"
+
+        with open("invoices_for_komvos_sign/"+doc.name+".txt", 'w') as f:
+                f.write(strwr.encode('utf-8'))
+        
+        frappe.db.set_value("Sales Invoice", doc.name, "mydata_infile_created", 1)
+        frappe.db.commit()
+        frappe.msgprint("MyData file is created")
+
+@frappe.whitelist()
+def create_cancellation_file_to_sign(doc, method):
+        if doc.mydata_result != "OK" and doc.mydata_result != "ERROR":
+                frappe.throw("Can not cancel the invoice. MyData processing awaited.")
+                return
+
+        if doc.docstatus == 2:
+                if not doc.mydata_official_mark_number:
+                        return
+
+                company_vat_id = frappe.db.get_value("Company", doc.company, "tax_id")
+                customer_tax_id = frappe.db.get_value("Customer", doc.customer, "tax_id")
+                customer_address = frappe.get_doc("Address", doc.customer_address)
+
+                fee = 0
+                vat = 0
+                total_other_exp = 0
+                for e in doc.quotation_data:
+                        if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees":
+                                fee = e.billing_value
+                                vat = e.vat_value
+                        else: 
+                                total_other_exp += e.total_billing_value
+
+
+                strwr = company_vat_id+";"+doc.naming_series+";"+doc.name+";"+str(doc.posting_date)+";"+customer_tax_id+";"+doc.customer_name+";"
+                strwr += (customer_address.address_line1 or "" ) + ";"+ (customer_address.city or "") +";"+ (customer_address.pincode or "") +";"
+                strwr += str(fee)+";"+str(vat)+";"+str(total_other_exp)+";"
+                
+                strwr += str(doc.mydata_official_mark_number)+";"
+                strwr += str(doc.mydata_evresis_id)
+
+                with open("invoices_for_komvos_sign/"+doc.name+"-C.txt", 'w') as f:
+                        f.write(strwr.encode('utf-8'))
+
+                frappe.msgprint("MyData Cancellation file is created")
+
+@frappe.whitelist()
+def parse_komvas_output_files():
+        path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/"
+        xml_path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/xmls"
+        processed_path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/success"
+        processed_error_path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/errors"
+
+        for file in os.listdir(path):
+                os.chdir(path)
+                if file.endswith(".txt") and os.path.isfile(file):
+                        file_path = path + "/"+ file
+
+                        inv_name = "SINV-" + file.split("_")[0]
+                        inv = frappe.get_doc("Sales Invoice", inv_name)
+                        if inv.mydata_result != "OK" and inv.docstatus == 1:
+                                output = read_text_file(file_path)
+                                output_arr = output.strip().split()
+                                if len(output_arr) > 0:
+                                        if output_arr[0] == "OK":
+                                                print(output)
+                                                print(inv_name)
+                                                inv.mydata_result = "OK"
+                                                inv.mydata_evresis_id = output_arr[2]
+                                                inv.mydata_official_mark_number = output_arr[3]
+                                                inv.mydata_uid_number = output_arr[4]
+                                                inv.save()
+                                                frappe.db.commit()
+                                                shutil.move(file_path, processed_path+ "/"+ file)
+                                        elif output_arr[0] == "ERROR":
+                                                inv.mydata_result = "ERROR"
+                                                inv.mydata_error = output.strip()
+                                                inv.save()
+                                                frappe.db.commit()
+                                                shutil.move(file_path, processed_error_path+ "/"+ file)
+                        else:
+                                shutil.move(file_path, processed_error_path+ "/"+ file)
+                                print("Skipped "+inv_name)
+                elif os.path.isfile(file):
+                        print(path)
+                        print(xml_path)
+                        shutil.move(path + "/"+ file, xml_path+ "/"+ file)  
+
+def read_text_file(file_path):
+    with io.open(file_path, 'r', encoding="ISO-8859-7") as f:
+        return f.read()
+
+@frappe.whitelist()
+def create_xml_file_for_komvos(proj):
+        project = frappe.get_doc("Project", proj)
+        if project.xml_html and project.xml_html != "":
+                html_en = html2text.html2text(project.xml_html)        
+                h = HTMLParser.HTMLParser()
+                xmld = h.unescape(html_en).encode('utf8')
+                with open("xmls_for_komvos_processing/"+project.name+".xml", 'w') as f:
+                        f.write(xmld)
+                frappe.msgprint("XML file created for Komvos processing.")
+        else:
+                frappe.msgprint("XML data is blank, please create xml first.")

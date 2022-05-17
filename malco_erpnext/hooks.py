@@ -89,13 +89,15 @@ hide_in_installer = True
 # 		"on_trash": "method"
 #	}
 # }
+
 doc_events = {
         "Sales Invoice": {
-            "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
-	},
-        "Delivery Note": {
-            "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
+            "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.create_file_to_sign",
+            "before_cancel": "malco_erpnext.malco_erpnext.malco_erpnext.create_cancellation_file_to_sign"
 	}
+        # "Delivery Note": {
+        #     "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
+	# }
 }
 
 # Scheduled Tasks
@@ -104,6 +106,9 @@ doc_events = {
 scheduler_events = {
         "daily": [
                 "malco_erpnext.malco_erpnext.malco_erpnext.complete_dn"
+        ],
+         "hourly": [
+                "malco_erpnext.malco_erpnext.malco_erpnext.parse_komvas_output_files"
         ]
 }
 # scheduler_events = {
