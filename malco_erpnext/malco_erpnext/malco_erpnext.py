@@ -592,3 +592,22 @@ def create_xml_file_for_komvos(proj):
                 frappe.msgprint("XML file created for Komvos processing.")
         else:
                 frappe.msgprint("XML data is blank, please create xml first.")
+
+@frappe.whitelist()
+def compare_with_past_expenses(proj):
+        project = frappe.get_doc("Project", proj)
+        sql = """select 
+                        ia.parent, ia.billing_account, ia.billing_value 
+                from `tabInvoice analysis` ia 
+                left join `tabProject` proj on proj.name = ia.parent 
+                where 
+                        ia.billing_account IN ('Έκτακτες δαπάνες εντός Τελωνείου - Customs procedures expenses', 'Παροχή Υπηρεσιών - Customs clearance fees') and 
+                        proj.customer = '{0}' and 
+                        proj.house_master = '{1}' and
+                        proj.country_of_import_or_export = '{2}' and
+                        proj.customs_authorities_of_declaration = '{3}'
+                order by proj.creation desc
+                limit 10
+        """.format(project.customer, project.house_master, project.country_of_import_or_export, project.customs_authorities_of_declaration)
+        res = frappe.db.sql(sql,as_dict=1)
+        return res

@@ -27,7 +27,9 @@ def create_xml_tags_recur(x, i, doc, currentLoop=None):
         page = etree.Element(x.tag)
         for v in x.attributes:
             if v.pyfunc != None:
-                page.set(v.attribName, eval(v.pyfunc))
+                value = eval(v.pyfunc)
+                value = "" if value == "None" else value
+                page.set(v.attribName, value)
             else:
                 page.set(v.attribName, v.staticVal)
         doc = etree.ElementTree(page)
@@ -51,12 +53,16 @@ def create_xml_tags_recur(x, i, doc, currentLoop=None):
         
         for v in x.attributes:
             if v.pyfunc != None:
-                pageElement.set(v.attribName, eval(v.pyfunc))
+                value = eval(v.pyfunc)
+                value = "" if value == "None" else value
+                pageElement.set(v.attribName, value)
             else:
                 pageElement.set(v.attribName, v.staticVal)
 
         if x.pyfunc:
-            pageElement.text = eval(x.pyfunc)
+            value = eval(x.pyfunc)
+            value = "" if value == "None" else value
+            pageElement.text = value
         elif x.staticVal:
             pageElement.text = x.staticVal
             
@@ -147,7 +153,7 @@ invoice_cxml = [
     MalcoXMLElement(tag="InvoiceDetailRequestHeader", staticVal=None, pyfunc=None, parent="InvoiceDetailRequest", attributes=[
         MalcoXMLAttribute(attribName="invoiceID", staticVal=None, pyfunc="inv.name"),
         MalcoXMLAttribute(attribName="invoiceDate", staticVal=None, pyfunc="""(inv.posting_date+inv.posting_time).strftime("%Y-%m-%d,%H:%M:%S")"""),
-        MalcoXMLAttribute(attribName="purpose", staticVal="standard", pyfunc=None),
+        MalcoXMLAttribute(attribName="purpose", staticVal=None, pyfunc="'creditMemo' if inv.is_return == 1 else 'standard'"),
         MalcoXMLAttribute(attribName="operation", staticVal="new", pyfunc=None),
         MalcoXMLAttribute(attribName="invoiceOrigin", staticVal="supplier", pyfunc=None),
     ]),
@@ -208,6 +214,21 @@ invoice_cxml = [
         MalcoXMLAttribute(attribName="identifier", staticVal=None, pyfunc="customer_details.tax_id"),
         MalcoXMLAttribute(attribName="domain", staticVal="vatID", pyfunc=None)
     ]),
+    MalcoXMLElement(tag="IdReference", staticVal=None, pyfunc=None, parent="InvoicePartner", attributes=[
+        MalcoXMLAttribute(attribName="identifier", staticVal=None, pyfunc="inv.customer"),
+        MalcoXMLAttribute(attribName="domain", staticVal="legalID", pyfunc=None)
+    ]),
+    MalcoXMLElement(tag="IdReference", staticVal=None, pyfunc=None, parent="InvoicePartner", attributes=[
+        MalcoXMLAttribute(attribName="identifier", staticVal="com.mdlz.id:GR", pyfunc=None),
+        MalcoXMLAttribute(attribName="domain", staticVal="tsgliID", pyfunc=None)
+    ]),
+
+    MalcoXMLElement(tag="Extrinsic", staticVal=None, pyfunc="""str(frappe.db.get_value("Project", inv.project, "master_bol_or_cmr"))""", parent="InvoiceDetailRequestHeader", attributes=[
+        MalcoXMLAttribute(attribName="name", staticVal="BOL", pyfunc=None),
+    ]),
+    MalcoXMLElement(tag="Extrinsic", staticVal=None, pyfunc="""str(inv.return_against) if inv.is_return == 1 else ''""", parent="InvoiceDetailRequestHeader", attributes=[
+        MalcoXMLAttribute(attribName="name", staticVal="InvoiceReferenceID", pyfunc=None),
+    ]),
 
     MalcoXMLElement(tag="InvoiceDetailOrder", staticVal=None, pyfunc=None, parent="InvoiceDetailRequest", attributes=[]),
     MalcoXMLElement(tag="InvoiceDetailOrderInfo", staticVal=None, pyfunc=None, parent="InvoiceDetailOrder", attributes=[]),
@@ -241,6 +262,15 @@ invoice_cxml = [
     ], loopName="invoiceLines"),
     MalcoXMLElement(tag="Tax", staticVal=None, pyfunc=None, parent="InvoiceDetailItem", attributes=[], loopName="invoiceLines"),
     MalcoXMLElement(tag="Money", staticVal=None, pyfunc="str(line.vat_value)", parent="Tax", attributes=[
+        MalcoXMLAttribute(attribName="currency", staticVal=None, pyfunc="inv.currency"),
+    ], loopName="invoiceLines"),
+    MalcoXMLElement(tag="TaxDetail", staticVal=None, pyfunc=None, parent="Tax", attributes=[
+        MalcoXMLAttribute(attribName="category", staticVal=None, pyfunc="""'vat' if line.vat > 0 else 'Z' """),
+        MalcoXMLAttribute(attribName="percentageRate", staticVal=None, pyfunc="""str(line.vat)"""),
+        MalcoXMLAttribute(attribName="taxPointDate", staticVal=None, pyfunc="""inv.posting_date.strftime("%Y-%m-%d")"""),
+    ], loopName="invoiceLines"),
+    MalcoXMLElement(tag="TaxAmount", staticVal=None, pyfunc=None, parent="TaxDetail", attributes=[], loopName="invoiceLines"),
+    MalcoXMLElement(tag="Money", staticVal=None, pyfunc="str(line.vat_value)", parent="TaxAmount", attributes=[
         MalcoXMLAttribute(attribName="currency", staticVal=None, pyfunc="inv.currency"),
     ], loopName="invoiceLines"),
     MalcoXMLElement(tag="NetAmount", staticVal=None, pyfunc=None, parent="InvoiceDetailItem", attributes=[], loopName="invoiceLines"),
