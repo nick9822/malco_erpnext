@@ -25,6 +25,8 @@ from frappe.desk.form.load import get_attachments
 from frappe.utils.file_manager import save_file, get_files_path
 
 from frappe.integrations.doctype.dropbox_settings.dropbox_settings import get_dropbox_settings
+from cdt_xml import CdtXML
+
 dropbox_settings = get_dropbox_settings()
 
 local_io_path = frappe.db.get_value("Dropbox Settings", None, "local_io_path")
@@ -611,3 +613,70 @@ def compare_with_past_expenses(proj):
         """.format(project.customer, project.house_master, project.country_of_import_or_export, project.customs_authorities_of_declaration)
         res = frappe.db.sql(sql,as_dict=1)
         return res
+
+@frappe.whitelist()
+def copy_xml_structure(copyFrom, copyTo):
+        fromDoc = frappe.get_doc("Customs Document Type", copyFrom)
+        toDoc = frappe.get_doc("Customs Document Type", copyTo)
+        for e in fromDoc.xml_structure:
+                cdict = e.as_dict()
+                del cdict["creation"]
+                del cdict["docstatus"]
+                del cdict["modified"]
+                del cdict["modified_by"]
+                del cdict["name"]
+                del cdict["owner"]
+                del cdict["parent"]
+                del cdict["parentfield"]
+                del cdict["parenttype"]
+                toDoc.append("xml_structure",cdict)
+        toDoc.save()
+        frappe.db.commit()
+        return "OK"
+
+@frappe.whitelist()
+def create_xml_file(projname, counter):
+        x = CdtXML(projname)
+        xml_html = x.startXml()
+        frappe.db.set_value("Project", projname, "xml_counter", counter)
+        frappe.db.set_value("Project", projname, "xml_html", xml_html)
+        create_xml_file_for_komvos_obj(projname, xml_html)
+        return xml_html
+
+def create_xml_file_for_komvos_obj(projname, xml_html):
+        # html_en = html2text.html2text(xml_html)        
+        # h = HTMLParser.HTMLParser()
+        # xmld = h.unescape(html_en).encode('utf8')
+        with open("xmls_for_komvos_processing/"+projname+".xml", 'w') as f:
+                f.write(xml_html)
+        frappe.msgprint("XML file created for Komvos processing.")
+
+
+@frappe.whitelist()
+def ci_invoice_after_submit_actions(docname):
+        si = frappe.get_doc("Sales Invoice", docname)
+        for e in si.project_reference_list:
+                proj = frappe.get_doc("Project", e.project_reference)
+                proj.invoice_no = docname
+                proj.status = "Invoice Confirmed"
+                proj.save()
+        frappe.db.commit()
+
+@frappe.whitelist()
+def ci_invoice_after_cancel_actions(docname):
+        si = frappe.get_doc("Sales Invoice", docname)
+        for e in si.project_reference_list:
+                proj = frappe.get_doc("Project", e.project_reference)
+                proj.invoice_no = ""
+                proj.status = "Under Invoicing"
+                proj.save()
+        frappe.db.commit()
+
+@frappe.whitelist()
+def ci_invoice_after_email_actions(docname):
+        si = frappe.get_doc("Sales Invoice", docname)
+        for e in si.project_reference_list:
+                proj = frappe.get_doc("Project", e.project_reference)
+                proj.status = "Closed"
+                proj.save()
+        frappe.db.commit()
