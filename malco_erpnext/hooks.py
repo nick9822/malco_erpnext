@@ -42,7 +42,7 @@ hide_in_installer = True
 
 # website user home page (by Role)
 # role_home_page = {
-#	"Role": "home_page"
+# 	"Role": "home_page"
 # }
 
 # Website user home page (by function)
@@ -87,29 +87,33 @@ hide_in_installer = True
 # 		"on_update": "method",
 # 		"on_cancel": "method",
 # 		"on_trash": "method"
-#	}
+# 	}
 # }
 
 doc_events = {
-        "Sales Invoice": {
-            "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.create_file_to_sign",
-            "before_cancel": "malco_erpnext.malco_erpnext.malco_erpnext.create_cancellation_file_to_sign"
-	}
-        # "Delivery Note": {
-        #     "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
-	# }
+    "Sales Invoice": {
+        "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.create_file_to_sign",
+        "before_cancel": "malco_erpnext.malco_erpnext.malco_erpnext.create_cancellation_file_to_sign",
+    },
+    "Project": {
+        "before_save": "malco_erpnext.malco_erpnext.malco_erpnext.proj_calculate"
+    }
+    # "Delivery Note": {
+    #     "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
+    # }
 }
 
 # Scheduled Tasks
 # ---------------
 
 scheduler_events = {
-        "daily": [
-                "malco_erpnext.malco_erpnext.malco_erpnext.complete_dn"
-        ],
-         "hourly": [
-                "malco_erpnext.malco_erpnext.malco_erpnext.parse_komvas_output_files"
-        ]
+    "daily": ["malco_erpnext.malco_erpnext.malco_erpnext.complete_dn"],
+    "hourly": [],
+    "all": [
+        "malco_erpnext.malco_erpnext.malco_erpnext.parse_komvas_output_files",
+        "malco_erpnext.malco_erpnext.malco_erpnext.parse_icis_output_xml_files",
+        "malco_erpnext.malco_erpnext.malco_erpnext.move_icis_files_to_projects",
+    ],
 }
 # scheduler_events = {
 # 	"all": [
@@ -140,4 +144,3 @@ scheduler_events = {
 # override_whitelisted_methods = {
 # 	"frappe.desk.doctype.event.event.get_events": "malco_erpnext.event.get_events"
 # }
-

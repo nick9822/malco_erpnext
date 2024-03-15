@@ -26,6 +26,7 @@ class CdtXML:
         self.customs_agent_master.address.country = frappe.db.get_value("Country", self.customs_agent_master.address.country, "code")
         self.customs_agent_master.eori_number = frappe.db.get_value("Supplier", self.cur_doc.customs_agent_master, "eori_number")
 
+        self.customs_warehouse = frappe.get_doc("Customs Warehouse", self.cur_doc.customs_warehouse)
         # show warnings and increase XML counter
 
     def startXmlOld(self):

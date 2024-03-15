@@ -18,7 +18,7 @@ import shutil
 
 from frappe.modules import get_doc_path
 from jinja2 import TemplateNotFound
-from frappe.utils import cint, strip_html
+from frappe.utils import cint, strip_html, flt
 from frappe.utils.pdf import get_pdf
 from PyPDF2 import PdfFileWriter, PdfFileReader
 from frappe.desk.form.load import get_attachments
@@ -26,6 +26,9 @@ from frappe.utils.file_manager import save_file, get_files_path
 
 from frappe.integrations.doctype.dropbox_settings.dropbox_settings import get_dropbox_settings
 from cdt_xml import CdtXML
+from xml.etree import ElementTree
+from frappe.utils.file_manager import save_url
+import qrcode
 
 dropbox_settings = get_dropbox_settings()
 
@@ -405,6 +408,7 @@ def return_invoice(doctype, name):
         if doctype == "Sales Invoice":
                 from erpnext.accounts.doctype.sales_invoice.sales_invoice import make_sales_return
                 docsin = make_sales_return(name)
+                docsin.naming_series = "RCPT-RET-"
                 docsin.submit()
                 frappe.db.commit()
         elif doctype == "Delivery Note":
@@ -441,6 +445,11 @@ def create_file_to_sign_frm_json(doc, method, recreate=0):
                 frappe.msgprint("MyData file is already created")
                 return
 
+        cgroup = frappe.db.get_value("Customer", doc.customer, "customer_group")
+        if cgroup == "Individual":
+                frappe.msgprint("This MyData function is not applicable for Individual customer")
+                return
+        
         company_vat_id = frappe.db.get_value("Company", doc.company, "tax_id")
         customer_tax_id = frappe.db.get_value("Customer", doc.customer, "tax_id")
         customer_address = frappe.get_doc("Address", doc.customer_address)
@@ -450,9 +459,9 @@ def create_file_to_sign_frm_json(doc, method, recreate=0):
         total_other_exp = 0
         for e in doc.quotation_data:
                 e = frappe._dict(e)
-                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees":
-                        fee = e.billing_value
-                        vat = e.vat_value
+                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or "Επιστροφή εισφορών ΕΕΠΑ":
+                        fee += e.billing_value
+                        vat += e.vat_value
                 else: 
                         total_other_exp += e.total_billing_value
 
@@ -470,6 +479,13 @@ def create_file_to_sign_frm_json(doc, method, recreate=0):
 
 @frappe.whitelist()
 def create_file_to_sign(doc, method):
+        if doc.mydata_result == "OK":
+                return
+        
+        cgroup = frappe.db.get_value("Customer", doc.customer, "customer_group")
+        if cgroup == "Individual":
+                return
+        
         # VAT (issuer) ; Invoice Series ;  Invoice No. ; Date (yyyy-mm-dd) ; Customer VAT number ; Customer Name ; Customer Address ; 
         # Customer City ;  Customer Post Code ; Office Payment (only our payment in euro e.g. 200.00) ; 
         # VAT (Vat for our payment only e.g. 48.00) ; Total of all other expenses.
@@ -481,9 +497,9 @@ def create_file_to_sign(doc, method):
         vat = 0
         total_other_exp = 0
         for e in doc.quotation_data:
-                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees":
-                        fee = e.billing_value
-                        vat = e.vat_value
+                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or "Επιστροφή εισφορών ΕΕΠΑ":
+                        fee += e.billing_value
+                        vat += e.vat_value
                 else: 
                         total_other_exp += e.total_billing_value
 
@@ -517,9 +533,9 @@ def create_cancellation_file_to_sign(doc, method):
                 vat = 0
                 total_other_exp = 0
                 for e in doc.quotation_data:
-                        if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees":
-                                fee = e.billing_value
-                                vat = e.vat_value
+                        if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or "Επιστροφή εισφορών ΕΕΠΑ":
+                                fee += e.billing_value
+                                vat += e.vat_value
                         else: 
                                 total_other_exp += e.total_billing_value
 
@@ -561,15 +577,37 @@ def parse_komvas_output_files():
                                                 inv.mydata_evresis_id = output_arr[2]
                                                 inv.mydata_official_mark_number = output_arr[3]
                                                 inv.mydata_uid_number = output_arr[4]
+                                                if len(output_arr)==6 and output_arr[5]:
+                                                        inv.mydata_qr_link = output_arr[5]
                                                 inv.save()
                                                 frappe.db.commit()
                                                 shutil.move(file_path, processed_path+ "/"+ file)
+                                                if len(output_arr)==6 and output_arr[5]:
+                                                        print(inv.name, output_arr[5])
+                                                        create_attach_qr_image(inv.name, output_arr[5])
                                         elif output_arr[0] == "ERROR":
                                                 inv.mydata_result = "ERROR"
                                                 inv.mydata_error = output.strip()
                                                 inv.save()
                                                 frappe.db.commit()
                                                 shutil.move(file_path, processed_error_path+ "/"+ file)
+                        elif inv.docstatus == 2:
+                                c_check = file.split("-")
+                                print(c_check)
+                                if len(c_check) > 1:
+                                        if c_check[1] == "C.txt":
+                                                output = read_text_file(file_path)
+                                                output_arr = output.strip().split()
+                                                if len(output_arr) > 0:
+                                                        if output_arr[0] == "OK":
+                                                                # update cancelled invoice
+                                                                cancel_mark = output_arr[1]
+                                                                frappe.db.sql("Update `tabSales Invoice` set mydata_cancellation_mark='{0}' where name='{1}'".format(cancel_mark, inv.name))
+                                                                frappe.db.commit()
+                                                                shutil.move(file_path, processed_path+ "/"+ file)
+                                                        else:
+                                                                shutil.move(file_path, processed_error_path+ "/"+ file)
+
                         else:
                                 shutil.move(file_path, processed_error_path+ "/"+ file)
                                 print("Skipped "+inv_name)
@@ -643,6 +681,14 @@ def create_xml_file(projname, counter):
         create_xml_file_for_komvos_obj(projname, xml_html)
         return xml_html
 
+@frappe.whitelist()
+def create_xml_file_locally(projname, counter):
+        x = CdtXML(projname)
+        xml_html = x.startXml()
+        frappe.db.set_value("Project", projname, "xml_counter", counter)
+        frappe.db.set_value("Project", projname, "xml_html", xml_html)
+        return xml_html
+
 def create_xml_file_for_komvos_obj(projname, xml_html):
         # html_en = html2text.html2text(xml_html)        
         # h = HTMLParser.HTMLParser()
@@ -677,6 +723,155 @@ def ci_invoice_after_email_actions(docname):
         si = frappe.get_doc("Sales Invoice", docname)
         for e in si.project_reference_list:
                 proj = frappe.get_doc("Project", e.project_reference)
-                proj.status = "Closed"
-                proj.save()
+                if proj.status != "Closed":
+                        proj.status = "Closed"
+                        proj.save()
+        frappe.db.commit()
+
+
+def read_xml_file(file_path):
+        tree = ElementTree.parse(file_path)
+        print(tree)
+        # root = tree.getroot()
+        # crew = tree.xpath('.//response')[0]
+        res_dict = {}
+        res = tree.find('response')
+        if res:
+                res_dict["lrn"] = res.find('lrn').text
+                res_dict["mrn"] = res.find('mrn').text
+                res_dict["status"] = res.find('status').text
+                if res.find('status').text in ("Rejected", "xmlError", "techError"):
+                        reasons = res.find("reasonList").findall("reason")
+                        reasons = [r.text for r in reasons]
+                        reasons = [res.find('status').text + " Reasons:"] + reasons
+                        reasonsStr = "\n".join(reasons)
+                        res_dict["error"] = reasonsStr
+        return res_dict
+
+
+@frappe.whitelist()
+def parse_icis_output_xml_files():
+        path = "/home/frappe/frappe-bench/sites/output_xml"
+        processed_path = "/home/frappe/frappe-bench/sites/output_xml/success"
+        processed_error_path = "/home/frappe/frappe-bench/sites/output_xml/errors"
+
+        for file in os.listdir(path):
+                os.chdir(path)
+                if file.endswith(".xml") and os.path.isfile(file):
+                        file_path = path + "/"+ file
+                        print(file_path)
+                        proj_name = file.split("-")[0]
+                        try:
+                                proj = frappe.get_doc("Project", proj_name)
+                                output = read_xml_file(file_path)
+                                print(output)
+                                if output.get("error"):
+                                        proj.rejection_reason = output.get["error"]
+                                        shutil.move(file_path, processed_error_path+ "/"+ file)
+                                        return
+                                if output.get("lrn"):
+                                        proj.mrn = output["mrn"]
+                                        proj.icisnet_status = output["status"]
+                                        proj.save()
+                                        frappe.db.commit()
+                                        shutil.move(file_path, processed_path+ "/"+ file)
+                                else:
+                                        print("skipped the file "+file_path)
+                                        shutil.move(file_path, processed_error_path+ "/"+ file)        
+                        except Exception as e:
+                                print(e)
+                                shutil.move(file_path, processed_error_path+ "/"+ file)
+
+@frappe.whitelist()
+def move_icis_files_to_projects():
+        path = "/home/frappe/frappe-bench/sites/output_pdf"
+        move_path = "/home/frappe/frappe-bench/sites/malco.gr/public/files"
+
+        for file in os.listdir(path):
+                os.chdir(path)
+                if file.endswith(".pdf") and os.path.isfile(file):
+                        file_path = path + "/"+ file
+                        print(file_path)
+                        proj_name = file.split("-")[0]
+                        try:
+                                shutil.move(file_path, move_path+ "/"+ file)
+                                save_url("https://malco.gr/files/"+file, file, "Project", proj_name, "Home/Attachments", False)
+                                frappe.db.commit()
+                        except Exception as e:
+                                print(e)
+
+
+@frappe.whitelist()
+def copy_files_to_icisnet(files, mrn):
+        copy_path = "/home/frappe/frappe-bench/sites/upload_icisnet/"
+        public_path = "/home/frappe/frappe-bench/sites/malco.gr/public"
+        private_path = "/home/frappe/frappe-bench/sites/malco.gr/private"
+        files  = json.loads(files)
+
+        for e in files:
+                file = frappe.get_doc("File", e)
+                path_to_look = public_path
+                if file.is_private == 1:
+                        path_to_look = private_path
+                
+                # raise ValueError(path_to_look+file.file_url, copy_path+file.attached_to_name+"-"+file.file_name)
+                try:
+                        shutil.copy(path_to_look+file.file_url, copy_path+file.attached_to_name+"-"+mrn+"-"+file.file_name)
+                except Exception as x:
+                        raise ValueError(path_to_look, file.file_url)
+                        print(x)
+
+@frappe.whitelist()
+def proj_calculate(doc, method):
+        cost_total, invoice_total, billing_cost_total, billing_invoice_total, billing_final_total = 0, 0, 0, 0, 0
+
+        for e in doc.cost_analysis:
+                if e.container_guarantee != 1:
+                        cost_total += flt(e.total_billing_value)
+                        billing_cost_total += flt(e.billing_value)
+
+        for e in doc.invoice_analysis:
+                invoice_total += flt(e.total_billing_value)
+                billing_invoice_total += flt(e.billing_value)
+
+        final_total = invoice_total - cost_total
+        billing_final_total = billing_invoice_total - billing_cost_total
+
+        doc.final_outcome = billing_final_total
+        doc.total_cost_value = cost_total
+        doc.total_billing_value = invoice_total
+        doc.total_outstanding_payment = invoice_total
+
+@frappe.whitelist()
+def create_payment_xml_file(projname):
+        mrn = frappe.db.get_value("Project", projname, "mrn")
+        xml_str = """<?xml version='1.0' encoding='utf-8'?>
+        <paymentXml>
+                <mrn>{0}</mrn>
+                <payment>yes</payment>
+        </paymentXml>
+        """.format(mrn)
+        with open("payment_xmls/"+projname+"-"+str(mrn)+".xml", 'w') as f:
+                f.write(xml_str)
+                frappe.db.set_value("Project", projname, "proceed_with_icisnet_payment", 1)
+        frappe.db.commit()
+
+
+def create_attach_qr_image(invname, link):
+        mfname = "{0}_QR.png".format(invname)
+
+	fname = os.path.join("/tmp", "frappe-inv-qr-{0}.png".format(frappe.generate_hash()))
+
+        img = qrcode.make(link)
+        img.save(fname)
+
+        filedata = ""
+        # print("Current working directory:", os.getcwd())
+        
+        os.chdir("/home/frappe/frappe-bench/sites")
+        # print("Current working directory:", os.getcwd())
+	with open(fname, "rb") as fileobj:
+                filedata = fileobj.read()
+		
+        saved_file = save_file(mfname, filedata, "Sales Invoice", invname, folder="Home/Attachments")
         frappe.db.commit()
