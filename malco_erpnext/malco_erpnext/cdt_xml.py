@@ -111,6 +111,7 @@ class CdtXML:
         elif tag.text_field_value:
             ele_txt = tag.text_field_value
         elif tag.functional_formula:
+            print(tag.functional_formula)
             ele_txt = CdtXML.execute_formula(tag.functional_formula, self)
 
         if tag.dont_allow_blank and (ele_txt=="" or ele_txt==None):
@@ -151,8 +152,8 @@ class CdtXML:
         for crew in self.xmlTree[self.top_parent_tag].xpath('.//GOOITEGDS'):
                 i_index = crew.find("IteNumGDS7").text
                 if int(i_index) > 1:
-                        for rcrew in crew.xpath('.//CONNR2'):
-                                rcrew.getparent().remove(rcrew)
+                        # for rcrew in crew.xpath('.//CONNR2'):
+                                # rcrew.getparent().remove(rcrew)
                         for rcrew in crew.xpath('.//TAXADDELE100'):
                                 rcrew.getparent().remove(rcrew)
                 hs_code = projdoc.commodities_data[int(i_index)-1].hs_code

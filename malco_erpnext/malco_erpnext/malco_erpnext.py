@@ -459,7 +459,7 @@ def create_file_to_sign_frm_json(doc, method, recreate=0):
         total_other_exp = 0
         for e in doc.quotation_data:
                 e = frappe._dict(e)
-                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or "Επιστροφή εισφορών ΕΕΠΑ":
+                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or e.billing_account == "Επιστροφή εισφορών ΕΕΠΑ":
                         fee += e.billing_value
                         vat += e.vat_value
                 else: 
@@ -497,7 +497,7 @@ def create_file_to_sign(doc, method):
         vat = 0
         total_other_exp = 0
         for e in doc.quotation_data:
-                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or "Επιστροφή εισφορών ΕΕΠΑ":
+                if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or e.billing_account == "Επιστροφή εισφορών ΕΕΠΑ":
                         fee += e.billing_value
                         vat += e.vat_value
                 else: 
@@ -533,7 +533,7 @@ def create_cancellation_file_to_sign(doc, method):
                 vat = 0
                 total_other_exp = 0
                 for e in doc.quotation_data:
-                        if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or "Επιστροφή εισφορών ΕΕΠΑ":
+                        if e.billing_account == "Παροχή Υπηρεσιών - Customs clearance fees" or e.billing_account == "Επιστροφή εισφορών ΕΕΠΑ":
                                 fee += e.billing_value
                                 vat += e.vat_value
                         else: 

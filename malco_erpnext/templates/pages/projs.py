@@ -54,12 +54,16 @@ def get_portal_files(doctype, name):
         file_list = []  
         for f in get_attachments(doctype, name):
                 if f.is_private != 1:
-                        if "malco" in f.file_name.lower():
-                                pass
-                        else:
-                                filename = f.file_name
-                                #filepath = os.path.abspath(frappe.local.site_path)+"/public"+f.file_url
-                                filepath = f.file_url
-                                file_list.append({'filename':filename,'filepath':filepath})
+                        filename = f.file_name
+                        #filepath = os.path.abspath(frappe.local.site_path)+"/public"+f.file_url
+                        filepath = f.file_url
+                        file_list.append({'filename':filename,'filepath':filepath})
+                        # if "malco" in f.file_name.lower():
+                        #         pass
+                        # else:
+                        #         filename = f.file_name
+                        #         #filepath = os.path.abspath(frappe.local.site_path)+"/public"+f.file_url
+                        #         filepath = f.file_url
+                        #         file_list.append({'filename':filename,'filepath':filepath})
 
         return file_list
