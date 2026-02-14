@@ -58,15 +58,17 @@ def read_xml_file(file_path):
         root = tree.getroot()
         if "EF15A" in root.tag:
                 print(CDT_MAP.get("EF15A"))
-                create_ef15a(tree)
+                create_ef15a(tree, file_path)
         elif "CC515A" in root.tag:
                 print(CDT_MAP.get("CC515A"))
-                create_cc515a(tree)
+                create_cc515a(tree, file_path)
         elif "GR815A" in root.tag:
                 print(CDT_MAP.get("GR815A"))
-                create_gr815a(tree)
+                create_gr815a(tree, file_path)
+        else:
+                print("unknown xml "+ root.tag)
 
-def create_cc515a(tree):
+def create_cc515a(tree, file_path):
         proj = frappe.new_doc("Project")
                 
         project_notes = ""
@@ -109,15 +111,14 @@ def create_cc515a(tree):
                         if len(country) > 0:
                                 proj.country_of_final_destination = country[0].name
                         else:
-                                print("No Country found with the given code "+ elem.text)
-                                return
+                                raise ValueError("No Country found with the given code "+ elem.text)
                 
                 if "AgrLocOfGooCodHEA38" == get_trimmed_tag(elem.tag):
                         wh = frappe.get_list('Customs Warehouse', filters={'customs_warehouse_code': elem.text}, fields=['name'])
                         if len(wh) > 0:
                                 proj.customs_warehouse = wh[0].name
                         else:
-                                print("No Customs warehouse found with the given code "+ elem.text)
+                                print("No Customs warehouse found with the given code ", elem.text)
                                 pass
 
                 
@@ -126,8 +127,7 @@ def create_cc515a(tree):
                         if len(country) > 0:
                                 proj.country_of_import_or_export = country[0].name
                         else:
-                                print("No Country found with the given code "+ elem.text)
-                                return
+                                raise ValueError("No Country found with the given code "+ elem.text)
 
                 if "InlTraModHEA75" == get_trimmed_tag(elem.tag):
                         proj.internal_means_of_transport_code = elem.text
@@ -136,10 +136,24 @@ def create_cc515a(tree):
                         proj.external_means_of_transport_code = elem.text
 
                 if "IdeOfMeaOfTraAtDHEA78" == get_trimmed_tag(elem.tag):
-                        proj.internal_means_of_transport_21 = MOT_MAP.get(elem.text, elem.text)
+                        mot_wo_spaces = re.sub(r"\s+", "", elem.text)
+                        mot_wo_spaces = frappe.db.exists("Means of Transport", mot_wo_spaces)
+                        if not mot_wo_spaces and not elem.text in MOT_MAP:
+                                print("No mapping of Mode of Transport from xml exists: ", elem.text, "file", file_path)
+                        if mot_wo_spaces:
+                                proj.internal_means_of_transport_21 = mot_wo_spaces
+                        else:
+                                proj.internal_means_of_transport_21 = MOT_MAP.get(elem.text, elem.text)
 
                 if "IdeOfMeaOfTraCroHEA85" == get_trimmed_tag(elem.tag):
-                        proj.external_means_of_transport = MOT_MAP.get(elem.text, elem.text)
+                        mot_wo_spaces = re.sub(r"\s+", "", elem.text)
+                        mot_wo_spaces = frappe.db.exists("Means of Transport", mot_wo_spaces)
+                        if not mot_wo_spaces and not elem.text in MOT_MAP:
+                                print("No mapping of Mode of Transport from xml exists: ", elem.text, "file", file_path)
+                        if mot_wo_spaces:
+                                proj.external_means_of_transport = mot_wo_spaces
+                        else:
+                                proj.external_means_of_transport = MOT_MAP.get(elem.text, elem.text)
                 
                 if "DecPlaHEA394" == get_trimmed_tag(elem.tag):
                         proj.place_of_customs_declaration = elem.text
@@ -213,7 +227,12 @@ def create_cc515a(tree):
                         # carows[ca_counter]["hs_code"] = HS_CODE_MAP.get(hs_code, hs_code)
 
                 if "DocTypDC21" == get_trimmed_tag(elem.tag):
-                        carows[ca_counter]["document_code"] = elem.text
+                        ca = frappe.db.exists("Customs Documents", elem.text)
+                        if ca:
+                                carows[ca_counter]["document_code"] = elem.text
+                        else:
+                                carows[ca_counter]["document_code"] = elem.text
+                                print("No mapping of Customs Documents from xml exists: ", elem.text, "file", file_path)
 
                 if "DocRefDC23" == get_trimmed_tag(elem.tag):
                         carows[ca_counter]["document_number"] = elem.text
@@ -245,6 +264,8 @@ def create_cc515a(tree):
                         hs_code += elem.text
                         hsrows[hsrows_counter]["hs_4_3"] = elem.text
                         hsrows[hsrows_counter]["hs_code"] = HS_CODE_MAP.get(hs_code, hs_code)
+                        if not hs_code in HS_CODE_MAP and not frappe.db.exists("HS_Code", hs_code):
+                                print("No mapping of HS_CODE from xml exists: ", hs_code, "file", file_path)
 
                 if "KinOfPacGS23" == get_trimmed_tag(elem.tag):
                         hsrows[hsrows_counter]["packaging"] = elem.text
@@ -288,7 +309,7 @@ def create_cc515a(tree):
         print(proj, proj.__dict__)
         proj.insert()
 
-def create_gr815a(tree):
+def create_gr815a(tree, file_path):
         proj = frappe.new_doc("Project")
                 
         project_notes = ""
@@ -321,8 +342,7 @@ def create_gr815a(tree):
                                 proj.customer = cust[0].name
                                 proj.invoiced_to_payer = cust[0].name
                         else:
-                                print("No Customer found with the given storage permit "+ elem.text)
-                                return
+                                raise ValueError("No Customer found with the given storage permit "+ elem.text)
                         
                 if "MessageRecipient" == get_trimmed_tag(elem.tag):
                         proj.customs_authorities_of_declaration = elem.text
@@ -383,24 +403,26 @@ def create_gr815a(tree):
                         guaranteerows[guarantee_counter]["bank_guarantee_number_grn"] = elem.text
 
 
-                if "BodyEadEsad" == get_trimmed_tag(elem.tag):
-                        curr_parent = "BodyEadEsad"
+                if "BodyEad" == get_trimmed_tag(elem.tag):
+                        curr_parent = "BodyEad"
                         hsrows_counter += 1
                         hsrows.append({})
 
                 if "CnCode" == get_trimmed_tag(elem.tag):
                         hs_code = elem.text
                         hsrows[hsrows_counter]["hs_code"] = HS_CODE_MAP.get(hs_code, hs_code)
+                        if not hs_code in HS_CODE_MAP:
+                                print("No mapping of HS_CODE from xml exists: ", hs_code, "file", file_path)
                 
                 if "Quantity" == get_trimmed_tag(elem.tag):
                         hsrows[hsrows_counter]["credit_weight"] = elem.text
                         hsrows[hsrows_counter]["gross_weight"] = elem.text
                         hsrows[hsrows_counter]["net_weight"] = elem.text
 
-                if "GrossMass" == get_trimmed_tag(elem.tag):
+                if "GrossWeight" == get_trimmed_tag(elem.tag):
                         hsrows[hsrows_counter]["gross_weight"] = elem.text
 
-                if "NetMass" == get_trimmed_tag(elem.tag):
+                if "NetWeight" == get_trimmed_tag(elem.tag):
                         hsrows[hsrows_counter]["net_weight"] = elem.text
 
                 if "Density" == get_trimmed_tag(elem.tag):
@@ -419,7 +441,14 @@ def create_gr815a(tree):
                         proj.external_means_of_transport_code = elem.text
 
                 if "IdentityOfTransportUnits" == get_trimmed_tag(elem.tag):
-                        proj.external_means_of_transport = MOT_MAP.get(elem.text, elem.text)
+                        mot_wo_spaces = re.sub(r"\s+", "", elem.text)
+                        mot_wo_spaces = frappe.db.exists("Means of Transport", mot_wo_spaces)
+                        if not mot_wo_spaces and not elem.text in MOT_MAP:
+                                print("No mapping of Mode of Transport from xml exists: ", elem.text, "file", file_path)
+                        if mot_wo_spaces:
+                                proj.external_means_of_transport = mot_wo_spaces
+                        else:
+                                proj.external_means_of_transport = MOT_MAP.get(elem.text, elem.text)
 
         proj.project_notes = project_notes
 
@@ -443,7 +472,7 @@ def create_gr815a(tree):
         proj.insert()
 
 
-def create_ef15a(tree):
+def create_ef15a(tree, file_path):
         proj = frappe.new_doc("Project")
                 
         project_notes = ""
@@ -478,8 +507,7 @@ def create_ef15a(tree):
                         if len(cam) > 0:
                                 proj.customs_agent_master = cam[0].name
                         else:
-                                print("No Supplier found with the given tax id "+ elem.text)
-                                return
+                                raise ValueError("No Supplier found with the given tax id "+ elem.text)
                         
                 if "SubmittingTraderIdentification" == get_trimmed_tag(elem.tag):
                         cust = frappe.get_list('Customer', filters={'tax_id': elem.text}, fields=['name'])
@@ -487,8 +515,7 @@ def create_ef15a(tree):
                                 proj.customer = cust[0].name
                                 proj.invoiced_to_payer = cust[0].name
                         else:
-                                print("No Customer found with the given tax id "+ elem.text)
-                                return
+                                raise ValueError("No Customer found with the given tax id "+ elem.text)
                         
                 if "RegistrationOffice" == get_trimmed_tag(elem.tag):
                         proj.customs_authorities_of_declaration = elem.text
@@ -499,22 +526,27 @@ def create_ef15a(tree):
                         if len(country) > 0:
                                 proj.country_of_import_or_export = country[0].name
                         else:
-                                print("No Country found with the given code "+ elem.text)
-                                return
+                                raise ValueError("No Country found with the given code "+ elem.text)
         
                 if "DestinationCountry" == get_trimmed_tag(elem.tag):
                         country = frappe.get_list('Country', filters={'code': elem.text}, fields=['name'])
                         if len(country) > 0:
                                 proj.country_of_final_destination = country[0].name
                         else:
-                                print("No Country found with the given code "+ elem.text)
-                                return
+                                raise ValueError("No Country found with the given code "+ elem.text)
 
                 if "DeclarationTypeCode" == get_trimmed_tag(elem.tag):
                         proj.customs_document_code = elem.text
 
                 if "TransportVehicleIdentificationNumber" == get_trimmed_tag(elem.tag):
-                        proj.external_means_of_transport = MOT_MAP.get(elem.text, elem.text)
+                        mot_wo_spaces = re.sub(r"\s+", "", elem.text)
+                        mot_wo_spaces = frappe.db.exists("Means of Transport", mot_wo_spaces)
+                        if not mot_wo_spaces and not elem.text in MOT_MAP:
+                                print("No mapping of Mode of Transport from xml exists: ", elem.text, "file", file_path)
+                        if mot_wo_spaces:
+                                proj.external_means_of_transport = mot_wo_spaces
+                        else:
+                                proj.external_means_of_transport = MOT_MAP.get(elem.text, elem.text)
 
                 if "TransportVehicleCountry" == get_trimmed_tag(elem.tag):
                         proj.external_means_of_transport_country_code = elem.text
@@ -544,7 +576,9 @@ def create_ef15a(tree):
                 if "TaricAdditionCode" == get_trimmed_tag(elem.tag):
                         hs_code += elem.text
                         hsrows[hsrows_counter]["hs_code"] = HS_CODE_MAP.get(hs_code, hs_code)
-                
+                        if not hs_code in HS_CODE_MAP:
+                                print("No mapping of HS_CODE from xml exists: ", hs_code, "file", file_path)
+
                 if "TaxQuantity" == get_trimmed_tag(elem.tag):
                         hsrows[hsrows_counter]["gross_weight"] = elem.text
                         hsrows[hsrows_counter]["net_weight"] = elem.text
@@ -598,9 +632,12 @@ def parse_files():
                         file_path = import_xml_path + "/"+ file
                         print(file_path)
 
-                        read_xml_file(file_path)
-                        projects_to_commit = True
-                        # break
+                        try:
+                                read_xml_file(file_path)
+                                print("finished processing successfully", file_path)
+                        except Exception as e:
+                                print("Processing", file_path, "Error:", e)
+                        projects_to_commit = False
                         # proj_name = file.split("-")[0]
                         # try:
                         #         proj = frappe.get_doc("Project", proj_name)
