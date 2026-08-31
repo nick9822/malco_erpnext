@@ -1,4 +1,4 @@
-pt.custom_customer = function (doc, cdt, cd) {
+cur_frm.cscript.custom_customer = function (doc, cdt, cd) {
     ////cur_frm.set_value("physical_delivery", doc.customer);
     cur_frm.set_value("invoiced_to_payer", doc.customer);
 };
