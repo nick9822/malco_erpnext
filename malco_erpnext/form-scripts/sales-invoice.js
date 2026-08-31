@@ -1,4 +1,4 @@
-ppe.ui.form.on("Sales Invoice", "refresh", function (frm, cdt, cdn) {
+frappe.ui.form.on("Sales Invoice", "refresh", function (frm, cdt, cdn) {
 
     if (frm.doc.__islocal && frm.doc.amended_from) {
         cur_frm.set_value("mydata_evresis_id", "");
@@ -98,22 +98,29 @@ ppe.ui.form.on("Sales Invoice", "refresh", function (frm, cdt, cdn) {
     }
 
     if (frm.doc.naming_series == "RCPT-" || frm.doc.naming_series == "RCPT-RET-") {
-        let element = document.getElementsByClassName("fa-print")[0];
-        console.log(element);
-        element.addEventListener('click', function () {
-            setTimeout(function () {
-                let ele = document.getElementsByClassName("print-preview-select")[0];
-                console.log(ele);
-                ele.value = "MalCo Receipt";
-                ele.dispatchEvent(new Event('change'));
-            }, 1000);
-        }, false);
+        setPrintPF("MalCo Receipt");
     }
 
     if (frm.doc.is_return && frm.doc.return_against.includes("SINV-")) {
         cur_frm.set_value("naming_series", "SINV-RET-");
     }    
+
+    if (frm.doc.naming_series == "SINV-RET-") {
+        setPrintPF("MalCo Invoice Credit Note");
+    }
 });
+
+function setPrintPF(pf) {
+    let element = document.getElementsByClassName("fa-print")[0];
+        element.addEventListener('click', function () {
+            setTimeout(function () {
+                let ele = document.getElementsByClassName("print-preview-select")[0];
+                console.log(ele);
+                ele.value = pf;
+                ele.dispatchEvent(new Event('change'));
+            }, 1000);
+        }, false);
+}
 
 frappe.ui.form.on("Sales Invoice", "after_submit", function (frm, cdt, cdn) {
     var p = frm.doc;
