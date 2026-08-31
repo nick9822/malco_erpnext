@@ -39,7 +39,7 @@ def get_projects():
         if frappe.session.user == 'Guest': 
 	    raise frappe.PermissionError
 
-        proj_list = frappe.db.sql('''select distinct project.*, cntd.*
+        proj_list = frappe.db.sql('''select distinct project.project_name, project.customs_document_type, project.status, project.eta_or_etd, project.date_of_final_delivery_or_dispatch, project.house_master, project.country_of_import_or_export, project.country_of_final_destination, project.master_bol_or_cmr, cntd.container_number, cntd.lot_number, project.external_means_of_transport
                         from tabProject as project
                         left join `tabProject User` as project_user on project_user.parent = project.name
                         left join `tabContainer data` as cntd on cntd.parent = project.name

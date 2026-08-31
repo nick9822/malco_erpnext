@@ -508,6 +508,12 @@ def create_file_to_sign(doc, method):
         strwr += (customer_address.address_line1 or "" ) + ";"+ (customer_address.city or "") +";"+ (customer_address.pincode or "") +";"
         strwr += str(fee)+";"+str(vat)+";"+str(total_other_exp)+";"
 
+        if doc.is_return:
+                return_invoice = frappe.get_doc("Sales Invoice", doc.return_against)
+                if not return_invoice.mydata_official_mark_number or not return_invoice.mydata_evresis_id:
+                        frappe.throw("Original invoice doesn't have MyData attributes, contact Administrator.") 
+                strwr += return_invoice.mydata_official_mark_number+";"+return_invoice.mydata_evresis_id+";"
+
         with open("invoices_for_komvos_sign/"+doc.name+".txt", 'w') as f:
                 f.write(strwr.encode('utf-8'))
         
@@ -875,3 +881,21 @@ def create_attach_qr_image(invname, link):
 		
         saved_file = save_file(mfname, filedata, "Sales Invoice", invname, folder="Home/Attachments")
         frappe.db.commit()
+
+@frappe.whitelist()
+def mark_pre_payment(project):
+        pre_status_list = ['Imported by Kovmos', 'Under Quotation', 'Expecting Documents', 'ETA or ETD']
+        if frappe.db.get_value("Project", project, "status") in pre_status_list:
+                frappe.db.set_value("Project", project, "pre_payment_inspection", 1)
+                frappe.db.commit()
+        else:
+                frappe.throw("Project is not in the correct state to select pre payment inspection.")
+
+@frappe.whitelist()
+def cancel_mark_pre_payment(project):
+        cancel_pre_status_list = ['Imported by Kovmos', 'Under Quotation', 'Expecting Documents', 'ETA or ETD']
+        if frappe.db.get_value("Project", project, "status") in cancel_pre_status_list:
+                frappe.db.set_value("Project", project, "pre_payment_inspection", 0)
+                frappe.db.commit()
+        else:
+                frappe.throw("Project is not in the correct state to cancel pre payment inspection.")
