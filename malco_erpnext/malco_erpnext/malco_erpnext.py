@@ -570,7 +570,7 @@ def parse_komvas_output_files():
                 if file.endswith(".txt") and os.path.isfile(file):
                         file_path = path + "/"+ file
 
-                        inv_name = "SINV-" + file.split("_")[0]
+                        inv_name = file.split("_")[0]
                         inv = frappe.get_doc("Sales Invoice", inv_name)
                         if inv.mydata_result != "OK" and inv.docstatus == 1:
                                 output = read_text_file(file_path)
@@ -864,23 +864,27 @@ def create_payment_xml_file(projname):
 
 
 def create_attach_qr_image(invname, link):
-        mfname = "{0}_QR.png".format(invname)
+        try:
+                mfname = "{0}_QR.png".format(invname)
 
-	fname = os.path.join("/tmp", "frappe-inv-qr-{0}.png".format(frappe.generate_hash()))
+                fname = os.path.join("/tmp", "frappe-inv-qr-{0}.png".format(frappe.generate_hash()))
 
-        img = qrcode.make(link)
-        img.save(fname)
+                img = qrcode.make(link)
+                img.save(fname)
 
-        filedata = ""
-        # print("Current working directory:", os.getcwd())
-        
-        os.chdir("/home/frappe/frappe-bench/sites")
-        # print("Current working directory:", os.getcwd())
-	with open(fname, "rb") as fileobj:
-                filedata = fileobj.read()
-		
-        saved_file = save_file(mfname, filedata, "Sales Invoice", invname, folder="Home/Attachments")
-        frappe.db.commit()
+                filedata = ""
+                # print("Current working directory:", os.getcwd())
+                
+                os.chdir("/home/frappe/frappe-bench/sites")
+                # print("Current working directory:", os.getcwd())
+                with open(fname, "rb") as fileobj:
+                        filedata = fileobj.read()
+                        
+                saved_file = save_file(mfname, filedata, "Sales Invoice", invname, folder="Home/Attachments")
+                print(saved_file.name)
+                frappe.db.commit()
+        except Exception as e:
+                frappe.log_error(title="Invoice QR Creation Error", message=frappe.get_traceback())
 
 @frappe.whitelist()
 def mark_pre_payment(project):
