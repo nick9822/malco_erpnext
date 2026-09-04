@@ -7269,28 +7269,28 @@ frappe.ui.form.on("Project", "before_save", function (frm, cdt, cdn) {
 
 frappe.ui.form.on("Project", "eta_or_etd", function (frm, cdt, cdn) {
     var p = cur_frm.doc;
-    if(p.days_of_free_demurrage_ && p.eta_or_etd) {
+    if (p.days_of_free_demurrage_ && p.eta_or_etd) {
         let days = parseInt(p.days_of_free_demurrage_);
         if (isNaN(days)) days = 0;
         frappe.model.set_value(
-                p.doctype,
-                p.name,
-                "last_day_of_free_demurrage",
-                frappe.datetime.add_days(p.eta_or_etd, days)
-            );
+            p.doctype,
+            p.name,
+            "last_day_of_free_demurrage",
+            frappe.datetime.add_days(p.eta_or_etd, days)
+        );
     }
 });
 
 frappe.ui.form.on("Project", "days_of_free_demurrage_", function (frm, cdt, cdn) {
     var p = cur_frm.doc;
-    if(p.days_of_free_demurrage_ && p.eta_or_etd) {
+    if (p.days_of_free_demurrage_ && p.eta_or_etd) {
         let days = parseInt(p.days_of_free_demurrage_);
         if (isNaN(days)) days = 0;
         frappe.model.set_value(
-                p.doctype,
-                p.name,
-                "last_day_of_free_demurrage",
-                frappe.datetime.add_days(p.eta_or_etd, days)
-            );
+            p.doctype,
+            p.name,
+            "last_day_of_free_demurrage",
+            frappe.datetime.add_days(p.eta_or_etd, days)
+        );
     }
 });

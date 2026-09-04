@@ -14,7 +14,7 @@ frappe.ui.form.on("Sales Invoice", "refresh", function (frm, cdt, cdn) {
         $(frm.fields_dict.qr_code.wrapper).html(html_value);
     }
 
-    if (frm.doc.docstatus == 1 && !frm.doc.mydata_qr_link && frappe.datetime.get_day_diff("2024-01-01",frm.doc.posting_date) <= 0) {
+    if (frm.doc.docstatus == 1 && !frm.doc.mydata_qr_link && frappe.datetime.get_day_diff("2024-01-01", frm.doc.posting_date) <= 0) {
         frappe.msgprint('<p style="color:red; font-weight: bold;">QR code under process, please do not send invoice before QR is created.</p>');
         $('.btn-new-email').hide();
         $('.reply-link').hide();
@@ -103,7 +103,7 @@ frappe.ui.form.on("Sales Invoice", "refresh", function (frm, cdt, cdn) {
 
     if (frm.doc.is_return && frm.doc.return_against.includes("SINV-")) {
         cur_frm.set_value("naming_series", "SINV-RET-");
-    }    
+    }
 
     if (frm.doc.naming_series == "SINV-RET-") {
         setPrintPF("MalCo Invoice Credit Note");
@@ -112,14 +112,14 @@ frappe.ui.form.on("Sales Invoice", "refresh", function (frm, cdt, cdn) {
 
 function setPrintPF(pf) {
     let element = document.getElementsByClassName("fa-print")[0];
-        element.addEventListener('click', function () {
-            setTimeout(function () {
-                let ele = document.getElementsByClassName("print-preview-select")[0];
-                console.log(ele);
-                ele.value = pf;
-                ele.dispatchEvent(new Event('change'));
-            }, 1000);
-        }, false);
+    element.addEventListener('click', function () {
+        setTimeout(function () {
+            let ele = document.getElementsByClassName("print-preview-select")[0];
+            console.log(ele);
+            ele.value = pf;
+            ele.dispatchEvent(new Event('change'));
+        }, 1000);
+    }, false);
 }
 
 frappe.ui.form.on("Sales Invoice", "after_submit", function (frm, cdt, cdn) {
