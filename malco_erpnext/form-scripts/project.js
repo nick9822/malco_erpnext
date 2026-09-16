@@ -4616,6 +4616,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                     ].doc.predocsumdecpacar1035 = "";
                     refresh_field("commodities_data");
 
+                    // ZZZ scenario
                     if (
                         p.commodities_data[e].field_40_1 == "Z" &&
                         p.commodities_data[e].field_40_2 == "ZZZ"
@@ -4633,6 +4634,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             e
                         ].doc.predoccatpreadmref21 = "Z";
                     } else {
+                        // Free Zone — Z-CLE scenario
                         if (
                             res.message.is_free_zone == 1 &&
                             p.commodities_data[e].preferential_status != ""
@@ -4662,6 +4664,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                                 e
                             ].doc.predoccatpreadmref21 = p.commodities_data[e].field_40_1;
                         } else if (
+                            // Outside Free Zone — Z-952 / Z-821 scenario
                             res.message.is_outside_of_free_zone == 1 &&
                             p.commodities_data[e].preferential_status != ""
                         ) {
@@ -4693,6 +4696,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                                 e
                             ].doc.predocquaar1006 = p.commodities_data[e].field_40_5;
                         } else if (
+                            // Customs Warehouse — Z-IM scenario
                             (typeof res.message.customs_warehouse_18_character ==
                                 "undefined" ||
                                 res.message.customs_warehouse_18_character != "0") &&
@@ -4745,6 +4749,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                                 e
                             ].doc.predocquaar1006 = p.commodities_data[e].field_40_5;
                         } else if (
+                            // Standard — X-337 scenario
                             p.commodities_data[e].preferential_status != "" &&
                             res.message.is_outside_of_free_zone == 0 &&
                             res.message.is_free_zone == 0 &&
@@ -4788,6 +4793,58 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             cur_frm.get_field("commodities_data").grid.grid_rows[
                                 e
                             ].doc.predocsumdecpacar1035 = p.commodities_data[e].packaging;
+                        } else if (
+                            // field_37 = 71 (bonded warehouse)
+                            (typeof res.message.customs_warehouse_18_character ==
+                                "undefined" ||
+                                res.message.customs_warehouse_18_character != "0") &&
+                            !p.commodities_data[e].preferential_status &&
+                            !p.commodities_data[e].field_37_a_1 == 71
+
+                        ) {
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.field_40_1 = "Z";
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.field_40_2 = "CLE";
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.field_40_3 = p.manifest_number;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.field_40_4 = p.commodities_data[e].record;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.field_40_5 = p.commodities_data[e].net_weight;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.wartypwaridgi10 = res.message.customs_warehouse_type;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.autcouwaridgi20 =
+                                res.message.customs_warehouse_language_code;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.waridewaridegi19 =
+                                res.message.customs_warehouse_18_character;
+                            refresh_field("commodities_data");
+
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.predoctypar21 = p.commodities_data[e].field_40_2;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.predoccatpreadmref21 = p.commodities_data[e].field_40_1;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.predocmrnar1004 = p.commodities_data[e].field_40_3;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.predocitear1005 = p.commodities_data[e].field_40_4;
+                            cur_frm.get_field("commodities_data").grid.grid_rows[
+                                e
+                            ].doc.predocquaar1006 = p.commodities_data[e].field_40_5;
                         }
                     }
                 }
