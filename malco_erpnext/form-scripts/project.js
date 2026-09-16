@@ -4697,7 +4697,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             ].doc.predocquaar1006 = p.commodities_data[e].field_40_5;
                         } else if (
                             // Customs Warehouse — Z-IM scenario
-                            (typeof res.message.customs_warehouse_18_character ==
+                            (typeof res.message.customs_warehouse_18_character !=
                                 "undefined" ||
                                 res.message.customs_warehouse_18_character != "0") &&
                             p.commodities_data[e].preferential_status != ""
@@ -4795,11 +4795,11 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             ].doc.predocsumdecpacar1035 = p.commodities_data[e].packaging;
                         } else if (
                             // field_37 = 71 (bonded warehouse)
-                            (typeof res.message.customs_warehouse_18_character ==
+                            (typeof res.message.customs_warehouse_18_character !=
                                 "undefined" ||
                                 res.message.customs_warehouse_18_character != "0") &&
                             !p.commodities_data[e].preferential_status &&
-                            !p.commodities_data[e].field_37_a_1 == 71
+                            p.commodities_data[e].field_37_a_1 == 71
 
                         ) {
                             cur_frm.get_field("commodities_data").grid.grid_rows[
@@ -4838,13 +4838,10 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             ].doc.predoccatpreadmref21 = p.commodities_data[e].field_40_1;
                             cur_frm.get_field("commodities_data").grid.grid_rows[
                                 e
-                            ].doc.predocmrnar1004 = p.commodities_data[e].field_40_3;
+                            ].doc.predocrefar26 = p.commodities_data[e].field_40_3;
                             cur_frm.get_field("commodities_data").grid.grid_rows[
                                 e
-                            ].doc.predocitear1005 = p.commodities_data[e].field_40_4;
-                            cur_frm.get_field("commodities_data").grid.grid_rows[
-                                e
-                            ].doc.predocquaar1006 = p.commodities_data[e].field_40_5;
+                            ].doc.predocreflng = "EN";
                         }
                     }
                 }
