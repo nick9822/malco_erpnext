@@ -718,6 +718,8 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
         nrow.is_automatic = 1;
     }
 
+    var transit_code = "";
+
     for (var i = 0; i < frm.doc.commodities_data.length; i++) {
         var code = frm.doc.commodities_data[i].hs_code;
         var ptv = frm.doc.commodities_data[i].total_value;
@@ -737,6 +739,9 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
         var agri = frm.doc.commodities_data[i].agricultural_duties;
         var antidump = frm.doc.commodities_data[i].antidumping_duties;
         var efk = frm.doc.commodities_data[i].efk;
+
+        var wop = frm.doc.commodities_data[i].way_of_payment || "H";
+        transit_code = frm.doc.commodities_data[i].transit_code || "";
 
         var troyal = 0;
         var tagri = 0;
@@ -764,7 +769,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
             rrow.hs_code = code;
             rrow.customs_charges_code = "A00";
             rrow.customs_charges_description = "Import duties";
-            rrow.way_of_payment_duties = "H";
+            rrow.way_of_payment_duties = wop;
             rrow.tax_base = flt(ptv).toFixed(2);
             rrow.coefficient = cduty.toFixed(2);
             rrow.customs_charge = ((flt(cduty) * flt(ptv)) / 100).toFixed(2);
@@ -777,7 +782,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
             rrow.hs_code = code;
             rrow.customs_charges_code = "A00";
             rrow.customs_charges_description = "Import duties";
-            rrow.way_of_payment_duties = "H";
+            rrow.way_of_payment_duties = wop;
             rrow.tax_base = flt(weight).toFixed(2);
             rrow.coefficient = royal.toFixed(2);
             if (weight > 1) {
@@ -797,7 +802,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
             rrow.hs_code = code;
             rrow.customs_charges_code = "A00";
             rrow.customs_charges_description = "Import duties";
-            rrow.way_of_payment_duties = "H";
+            rrow.way_of_payment_duties = wop;
             rrow.tax_base = flt(weight).toFixed(2);
             rrow.coefficient = agri.toFixed(2);
             if (w > 100) {
@@ -817,7 +822,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
             rrow.hs_code = code;
             rrow.customs_charges_code = "A00";
             rrow.customs_charges_description = "Import duties";
-            rrow.way_of_payment_duties = "H";
+            rrow.way_of_payment_duties = wop;
             rrow.tax_base = flt(ptv).toFixed(2);
             rrow.coefficient = antidump.toFixed(2);
             rrow.customs_charge = ((flt(antidump) * flt(ptv)) / 100).toFixed(2);
@@ -830,7 +835,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
             rrow.hs_code = code;
             rrow.customs_charges_code = "A00";
             rrow.customs_charges_description = "Import duties";
-            rrow.way_of_payment_duties = "H";
+            rrow.way_of_payment_duties = wop;
             rrow.tax_base = flt(ptv).toFixed(2);
             rrow.coefficient = efk.toFixed(2);
             rrow.customs_charge = ((flt(efk) * flt(ptv)) / 100).toFixed(2);
@@ -846,7 +851,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
             rrow.hs_code = code;
             rrow.customs_charges_code = "B00";
             rrow.customs_charges_description = "VAT";
-            rrow.way_of_payment_duties = "H";
+            rrow.way_of_payment_duties = wop;
             rrow.tax_base = (
                 flt(tcd) +
                 flt(tr) +
@@ -975,7 +980,7 @@ frappe.ui.form.on("Project", "fetch_values", function (frm, cdt, cdn) {
         rrow.is_automatic = 1;
         refresh_field("invoice_analysis");
     }
-    if (totalfcvattotal > 0) {
+    if (totalfcvattotal > 0 && transit_code != "X16") {
         var rrow = frm.add_child("cost_analysis");
         rrow.billing_account = "ΦΠΑ εισαγωγής - Import VAT";
         rrow.billing_account_description = "ΦΠΑ εισαγωγής - Import VAT";

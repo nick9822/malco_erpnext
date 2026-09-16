@@ -1,32 +1,61 @@
+from __future__ import unicode_literals
+
 import frappe
 from lxml import etree
 import HTMLParser
+
 
 class CdtXML:
     def __init__(self, docname):
         self.xmlTree = {}
         self.curXmlStructIdx = 0
         self.cur_doc = frappe.get_doc("Project", docname)
-        self.cdt = frappe.get_doc("Customs Document Type", self.cur_doc.customs_document_type)
+        self.cdt = frappe.get_doc(
+            "Customs Document Type", self.cur_doc.customs_document_type
+        )
         self.top_parent_tag = self.cdt.xml_structure[0].xml_tag_name
-               
-        self.customer = frappe._dict(address=None, eori_number=None, representation_type=None)
-        self.customer.address = frappe.get_doc("Address", self.cur_doc.customer+"-Billing")
-        self.customer.address.country = frappe.db.get_value("Country", self.customer.address.country, "code")
-        self.customer.eori_number = frappe.db.get_value("Customer", self.cur_doc.customer, "eori_number")
-        self.customer.representation_type = frappe.db.get_value("Customer", self.cur_doc.customer, "representation_type")
+
+        self.customer = frappe._dict(
+            address=None, eori_number=None, representation_type=None
+        )
+        self.customer.address = frappe.get_doc(
+            "Address", self.cur_doc.customer + "-Billing"
+        )
+        self.customer.address.country = frappe.db.get_value(
+            "Country", self.customer.address.country, "code"
+        )
+        self.customer.eori_number = frappe.db.get_value(
+            "Customer", self.cur_doc.customer, "eori_number"
+        )
+        self.customer.representation_type = frappe.db.get_value(
+            "Customer", self.cur_doc.customer, "representation_type"
+        )
 
         self.house_master = frappe._dict(address=None, eori_number=None)
-        self.house_master.address = frappe.get_doc("Address", self.cur_doc.house_master+"-Billing")
-        self.house_master.address.country = frappe.db.get_value("Country", self.house_master.address.country, "code")
-        self.house_master.eori_number = frappe.db.get_value("Customer", self.cur_doc.house_master, "eori_number")
+        self.house_master.address = frappe.get_doc(
+            "Address", self.cur_doc.house_master + "-Billing"
+        )
+        self.house_master.address.country = frappe.db.get_value(
+            "Country", self.house_master.address.country, "code"
+        )
+        self.house_master.eori_number = frappe.db.get_value(
+            "Customer", self.cur_doc.house_master, "eori_number"
+        )
 
         self.customs_agent_master = frappe._dict(address=None, eori_number=None)
-        self.customs_agent_master.address = frappe.get_doc("Address", self.cur_doc.customs_agent_master+"-Billing")
-        self.customs_agent_master.address.country = frappe.db.get_value("Country", self.customs_agent_master.address.country, "code")
-        self.customs_agent_master.eori_number = frappe.db.get_value("Supplier", self.cur_doc.customs_agent_master, "eori_number")
+        self.customs_agent_master.address = frappe.get_doc(
+            "Address", self.cur_doc.customs_agent_master + "-Billing"
+        )
+        self.customs_agent_master.address.country = frappe.db.get_value(
+            "Country", self.customs_agent_master.address.country, "code"
+        )
+        self.customs_agent_master.eori_number = frappe.db.get_value(
+            "Supplier", self.cur_doc.customs_agent_master, "eori_number"
+        )
 
-        self.customs_warehouse = frappe.get_doc("Customs Warehouse", self.cur_doc.customs_warehouse)
+        self.customs_warehouse = frappe.get_doc(
+            "Customs Warehouse", self.cur_doc.customs_warehouse
+        )
         # show warnings and increase XML counter
 
     def startXmlOld(self):
@@ -47,131 +76,228 @@ class CdtXML:
     def startXml(self):
         self.initCreate(None, 0)
         self.remove_duplicate_tags()
-        print(etree.tostring(self.xmlTree[self.top_parent_tag], encoding='utf-8', xml_declaration=True))
-        return etree.tostring(self.xmlTree[self.top_parent_tag], encoding='utf-8', xml_declaration=True)
-    
+        print(
+            etree.tostring(
+                self.xmlTree[self.top_parent_tag],
+                encoding="utf-8",
+                xml_declaration=True,
+            )
+        )
+        return etree.tostring(
+            self.xmlTree[self.top_parent_tag], encoding="utf-8", xml_declaration=True
+        )
+
     def initCreate(self, loop_item, idx):
         jumpIdx = 0
         for tLIdx, e in enumerate(self.cdt.xml_structure):
-            print("JMP Idx "+str(jumpIdx)+" loop idx "+str(tLIdx)+" loop item "+ str(loop_item))
+            # print(
+            #     "JMP Idx "
+            #     + str(jumpIdx)
+            #     + " loop idx "
+            #     + str(tLIdx)
+            #     + " loop item "
+            #     + str(loop_item)
+            # )
             if idx != 0 and tLIdx <= idx:
                 continue
-            
+
             if jumpIdx > 0 and tLIdx <= jumpIdx:
                 continue
 
-            if e.depends_on and e.depends_on != "" and e.depends_on != None:
-                if CdtXML.execute_formula(e.depends_on, self) == False:
-                    continue
+            if (
+                e.depends_on
+                and not e.is_loop
+                and not CdtXML.execute_formula(
+                    e.depends_on, self, loop_item=loop_item, loop_idx=idx
+                )
+            ):
+                # print("skipping tag group >>>", e.xml_tag_name)
+                # make jump over children
+                for fJIdx, f in enumerate(self.cdt.xml_structure):
+                    if fJIdx <= tLIdx:
+                        continue
+                    if f.xml_parent_tag == e.xml_tag_name:
+                        jumpIdx = fJIdx
+                    else:
+                        break
+                continue
 
             if e.is_loop and e.loop_field_name:
                 loop_items = getattr(self.cur_doc, e.loop_field_name)
                 for llidx, li in enumerate(loop_items):
+                    if (
+                        e.depends_on
+                        and e.is_loop
+                        and not CdtXML.execute_formula(
+                            e.depends_on,
+                            self,
+                            loop_item=loop_item,
+                            loop_idx=idx,
+                            cur_loop_item=li,
+                            cur_loop_idx=llidx,
+                        )
+                    ):
+                        # print("skipping loop item >>>", e.xml_tag_name)
+                        # print("skipping loop item >>>", e.loop_field_name)
+                        # make jump over children
+                        for fJIdx, f in enumerate(self.cdt.xml_structure):
+                            if fJIdx <= tLIdx:
+                                continue
+                            if f.xml_parent_tag == e.xml_tag_name:
+                                jumpIdx = fJIdx
+                            else:
+                                break
+                        continue
+
                     if llidx > 0 and e.allow_only_in_first_iteration:
+                        # print(e.xml_tag_name)
                         return tLIdx
                     self.createElement(e, li, llidx)
-                    print("Initiating Loop..."+li.doctype+" "+str(tLIdx))
+                    # print(
+                    #     "Initiating Loop..."
+                    #     + li.doctype
+                    #     + " "
+                    #     + str(tLIdx)
+                    #     + " "
+                    #     + e.xml_tag_name
+                    #     + " "
+                    #     + e.loop_field_name
+                    # )
                     jumpIdx = self.initCreate(li, tLIdx)
-                
+
                 if len(loop_items) == 0:
                     for fJIdx, f in enumerate(self.cdt.xml_structure):
                         if fJIdx <= tLIdx:
                             continue
 
                         if f.last_field_of_loop:
-                            print("Setting up zero items loop jump to "+str(fJIdx))
+                            # print("Setting up zero items loop jump to " + str(fJIdx))
                             jumpIdx = fJIdx
                             break
             else:
-                print("Creating..."+e.xml_tag_name)
+                # print("Creating..." + e.xml_tag_name)
                 if loop_item:
-                    print("Loop Item..."+loop_item.doctype+" "+str(idx))
-                
+                    # print("Loop Item..." + loop_item.doctype + " " + str(idx))
+                    pass
+
                 self.createElement(e, loop_item, idx)
-                if e.last_field_of_loop: 
-                    print("Last field of loop..."+e.xml_tag_name)
+                if e.last_field_of_loop:
+                    # print("Last field of loop..." + e.xml_tag_name)
                     return tLIdx
             self.curXmlStructIdx = tLIdx
-        return len(self.cdt.xml_structure)-1
-    
+        return len(self.cdt.xml_structure) - 1
+
     def createElement(self, tag, loop_item, idx):
         ele = etree.Element(tag.xml_tag_name)
         ele_txt = ""
+        # print(
+        #     tag.xml_tag_name,
+        #     tag.local_field_name,
+        #     tag.nl_field_link,
+        #     tag.text_field_value,
+        #     tag.functional_formula,
+        # )
         if tag.local_field_name and not tag.nl_field_link:
             if loop_item:
                 frags = tag.local_field_name.split(".")
                 if len(frags) > 1:
                     ele_txt = getattr(loop_item, frags[1])
                 else:
-                    ele_txt = getattr(self.cur_doc, tag.local_field_name)    
+                    ele_txt = getattr(self.cur_doc, tag.local_field_name)
             else:
                 ele_txt = getattr(self.cur_doc, tag.local_field_name)
         elif tag.nl_field_link:
-            ele_txt = frappe.db.get_value(tag.nl_field_link, getattr(self.cur_doc, tag.nl_field_name), tag.local_field_name)
+            ele_txt = frappe.db.get_value(
+                tag.nl_field_link,
+                getattr(self.cur_doc, tag.nl_field_name),
+                tag.local_field_name,
+            )
         elif tag.text_field_value:
             ele_txt = tag.text_field_value
-        elif tag.functional_formula:
-            print(tag.functional_formula)
-            ele_txt = CdtXML.execute_formula(tag.functional_formula, self)
 
-        if tag.dont_allow_blank and (ele_txt=="" or ele_txt==None):
+        if tag.functional_formula:
+            ele_txt = CdtXML.execute_formula(
+                tag.functional_formula,
+                self,
+                loop_item=None,
+                loop_idx=None,
+                cur_loop_item=loop_item,
+                cur_loop_idx=idx,
+            )
+
+        if tag.dont_allow_blank and (ele_txt == "" or ele_txt == None):
             return
-        
+
         if ele_txt and tag.trim_chars > 0:
-            ele_txt = ele_txt[:tag.trim_chars]
+            ele_txt = ele_txt[: tag.trim_chars]
 
         if tag.precision > 0:
             ele_txt = round(ele_txt, tag.precision)
 
-        ele.text = u'{0}'.format(ele_txt) if (ele_txt or ele_txt >= 0) else ""
+        ele.text = "{0}".format(ele_txt) if (ele_txt or ele_txt >= 0) else ""
 
         if tag.xml_parent_tag:
             doc = self.xmlTree[tag.xml_parent_tag]
             doc.append(ele)
-        
+
         self.xmlTree[tag.xml_tag_name] = ele
 
     @staticmethod
-    def execute_formula(formula, loc_globals):
+    def execute_formula(
+        formula,
+        loc_globals,
+        loop_item=None,
+        loop_idx=None,
+        cur_loop_item=None,
+        cur_loop_idx=None,
+    ):
         formula = HTMLParser.HTMLParser().unescape(formula)
         loc_dict = loc_globals.__dict__
         loc_dict["frappe"] = frappe
+        loc_dict["loop_item"] = loop_item
+        loc_dict["loop_idx"] = loop_idx
+        loc_dict["cur_loop_item"] = cur_loop_item
+        loc_dict["cur_loop_idx"] = cur_loop_idx
 
         loc = {}
         exec(formula, loc_globals.__dict__, loc)
         r = loc.get("exportVar", "")
         return r if r != None else ""
-    
+
     def remove_duplicate_tags(self):
         projdoc = self.cur_doc
-        # html_en = html2text.html2text(projdoc.xml_html)        
+        # html_en = html2text.html2text(projdoc.xml_html)
         # h = HTMLParser.HTMLParser()
         # xmld = h.unescape(html_en).encode('utf8')
         # root = etree.fromstring(xmld)
-        print(self.top_parent_tag)
-        for crew in self.xmlTree[self.top_parent_tag].xpath('.//GOOITEGDS'):
-                i_index = crew.find("IteNumGDS7").text
-                if int(i_index) > 1:
-                        # for rcrew in crew.xpath('.//CONNR2'):
-                                # rcrew.getparent().remove(rcrew)
-                        for rcrew in crew.xpath('.//TAXADDELE100'):
-                                rcrew.getparent().remove(rcrew)
-                hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
-                for idx, ccrew in enumerate(crew.xpath('.//PRODOCDC2')):
-                        score = 0
-                        vdoc = ccrew.find("DocTypDC21").text
-                        for idxx, e in enumerate(projdoc.customs_attachments):
-                                if e.document_code == vdoc and e.hs_code == hs_code and idx == idxx:
-                                        score = score + 1
-                        if score == 0:
-                                ccrew.getparent().remove(ccrew)
-                for idx, ccrew in enumerate(crew.xpath('.//CALTAXGOD')):
-                        score = 0
-                        vdoc = ccrew.find("TypOfTaxCTX1").text
-                        for idxx, e in enumerate(projdoc.customs_duties_analysis):
-                                if e.customs_charges_code == vdoc and e.hs_code == hs_code and idx == idxx:
-                                        score = score + 1
-                        if score == 0:
-                                ccrew.getparent().remove(ccrew)
+        # print(self.top_parent_tag)
+        for crew in self.xmlTree[self.top_parent_tag].xpath(".//GOOITEGDS"):
+            i_index = crew.find("IteNumGDS7").text
+            if int(i_index) > 1:
+                # for rcrew in crew.xpath('.//CONNR2'):
+                # rcrew.getparent().remove(rcrew)
+                for rcrew in crew.xpath(".//TAXADDELE100"):
+                    rcrew.getparent().remove(rcrew)
+            hs_code = projdoc.commodities_data[int(i_index) - 1].hs_code
+            for idx, ccrew in enumerate(crew.xpath(".//PRODOCDC2")):
+                score = 0
+                vdoc = ccrew.find("DocTypDC21").text
+                for idxx, e in enumerate(projdoc.customs_attachments):
+                    if e.document_code == vdoc and e.hs_code == hs_code and idx == idxx:
+                        score = score + 1
+                if score == 0:
+                    ccrew.getparent().remove(ccrew)
+            for idx, ccrew in enumerate(crew.xpath(".//CALTAXGOD")):
+                score = 0
+                vdoc = ccrew.find("TypOfTaxCTX1").text
+                for idxx, e in enumerate(projdoc.customs_duties_analysis):
+                    if (
+                        e.customs_charges_code == vdoc
+                        and e.hs_code == hs_code
+                        and idx == idxx
+                    ):
+                        score = score + 1
+                if score == 0:
+                    ccrew.getparent().remove(ccrew)
         # op = etree.tostring(root, pretty_print=True)
         # return h.unescape(op)

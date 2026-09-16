@@ -560,6 +560,7 @@ def create_cancellation_file_to_sign(doc, method):
 
 @frappe.whitelist()
 def parse_komvas_output_files():
+        # return
         path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/"
         xml_path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/xmls"
         processed_path = "/home/frappe/frappe-bench/sites/invoices_for_komvos_sign_output/success"
