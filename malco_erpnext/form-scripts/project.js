@@ -4593,6 +4593,8 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
             freeze: true,
             callback: function (res) {
                 console.log(res);
+                const customs_warehouse_18_character = res?.message?.customs_warehouse_18_character;
+
                 for (var e = 0; e < p.commodities_data.length; e++) {
                     console.log(p.commodities_data[e].preferential_status);
 
@@ -4697,9 +4699,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             ].doc.predocquaar1006 = p.commodities_data[e].field_40_5;
                         } else if (
                             // Customs Warehouse — Z-IM scenario
-                            (typeof res.message.customs_warehouse_18_character !=
-                                "undefined" ||
-                                res.message.customs_warehouse_18_character != "0") &&
+                            (!customs_warehouse_18_character || customs_warehouse_18_character !== "0") &&
                             p.commodities_data[e].preferential_status != ""
                         ) {
                             console.log("Z-IM");
@@ -4730,7 +4730,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             cur_frm.get_field("commodities_data").grid.grid_rows[
                                 e
                             ].doc.waridewaridegi19 =
-                                res.message.customs_warehouse_18_character;
+                                customs_warehouse_18_character;
                             refresh_field("commodities_data");
 
                             cur_frm.get_field("commodities_data").grid.grid_rows[
@@ -4753,9 +4753,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             p.commodities_data[e].preferential_status != "" &&
                             res.message.is_outside_of_free_zone == 0 &&
                             res.message.is_free_zone == 0 &&
-                            (typeof res.message.customs_warehouse_18_character ==
-                                "undefined" ||
-                                res.message.customs_warehouse_18_character == "0")
+                            (customs_warehouse_18_character || customs_warehouse_18_character === "0")
                         ) {
                             console.log("X-337");
                             cur_frm.get_field("commodities_data").grid.grid_rows[
@@ -4795,9 +4793,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             ].doc.predocsumdecpacar1035 = p.commodities_data[e].packaging;
                         } else if (
                             // field_37 = 71 (bonded warehouse)
-                            (typeof res.message.customs_warehouse_18_character !=
-                                "undefined" ||
-                                res.message.customs_warehouse_18_character != "0") &&
+                            (!customs_warehouse_18_character || customs_warehouse_18_character !== "0") &&
                             !p.commodities_data[e].preferential_status &&
                             p.commodities_data[e].field_37_a_1 == 71
 
@@ -4827,7 +4823,7 @@ frappe.ui.form.on("Project", "fetch_data_for_xml", function (frm, cdt, cdn) {
                             cur_frm.get_field("commodities_data").grid.grid_rows[
                                 e
                             ].doc.waridewaridegi19 =
-                                res.message.customs_warehouse_18_character;
+                                customs_warehouse_18_character
                             refresh_field("commodities_data");
 
                             cur_frm.get_field("commodities_data").grid.grid_rows[
