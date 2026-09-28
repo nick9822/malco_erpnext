@@ -2083,6 +2083,10 @@ frappe.ui.form.on("Project", "create_delivery_note", function (frm, cdt, cdn) {
 
             if (p.container_data.length > 1) {
                 for (var e = 0; e < frm.doc.container_data.length; e++) {
+                    if (!p.container_data[e].container_gross_weight) {
+                        frappe.throw("Container row has gross weight missing, please fill and save before creating DN");
+                    }
+
                     c = new Array();
                     console.log(e);
                     c[0] = {
