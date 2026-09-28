@@ -32,8 +32,6 @@ ALL_PORTAL_STATUSES = [
     "QR Code Under Process",
     "Closed",
     "Import not Allowed",
-    "Cancelled Delivery",
-    "Cancelled",
 ]
 
 DEFAULT_STATUSES = [
@@ -57,8 +55,28 @@ DEFAULT_STATUSES = [
     "QR Code Under Process",
     "Closed",
     "Import not Allowed",
-    "Cancelled Delivery",
-    "Cancelled",
+]
+
+DEFAULT_LIST_STATUSES = [
+    "Under Quotation",
+    "Expecting Documents",
+    "Open",
+    "Under Examination",
+    "ETA or ETD",
+    "Expecting Bank Transfer",
+    "Expecting Delivery Order or Data",
+    "Under Pre payment Inspection",
+    "Before ICISnet Progress",
+    "Under ICISnet Progress",
+    "Under Customs Control",
+    "Under Balance Payment",
+    "Under Delivery",
+    "Under Destruction",
+    "Completed",
+    "Under Invoicing",
+    "Invoice Confirmed",
+    "QR Code Under Process",
+    "Import not Allowed",
 ]
 
 """
@@ -101,6 +119,20 @@ MOT_MAP = {
     "18": "SHIP",
 }
 
+PRE_STATUS_LIST = [
+    "Imported by Kovmos",
+    "Under Quotation",
+    "Expecting Documents",
+    "ETA or ETD",
+]
+CANCEL_PRE_STATUS_LIST = [
+    "Imported by Kovmos",
+    "Under Quotation",
+    "Expecting Documents",
+    "ETA or ETD",
+]
+
+
 PRIVILEGED_USERS = ["Administrator", "erpnext@malco.gr", "nmalefakis@malco.gr"]
 
 
@@ -142,6 +174,11 @@ def serialize_attachment(attachment):
 @frappe.whitelist()
 def get_privileged_users():
     return PRIVILEGED_USERS
+
+
+@frappe.whitelist()
+def is_session_privileged():
+    return frappe.session.user in PRIVILEGED_USERS
 
 
 @frappe.whitelist()
@@ -199,6 +236,7 @@ def get_project(docname):
     proj_res_object = {
         "id": proj.name,
         "status": proj.status,
+        "prePaymentInspection": proj.pre_payment_inspection == 1,
         "basic": {
             "mrn": proj.mrn or "",
             "customsDocType": proj.customs_document_type,
@@ -215,6 +253,7 @@ def get_project(docname):
             "masterBolOrCmr": proj.master_bol_or_cmr or "",
             "customsWarehouse": proj.customs_warehouse or "",
             "externalMeansOfTransport": proj.external_means_of_transport or "",
+            "externalMeansOfTransportCode": proj.external_means_of_transport_code or "",
         },
         "containers": [
             serialize_container(container) for container in proj.container_data
@@ -250,8 +289,8 @@ def get_project(docname):
         ],
     }
 
-    proj_res_object["transport"]["external_mot_mode"] = MOT_MAP.get(
-        proj_res_object.get("external_means_of_transport_code", "1"), "SHIP"
+    proj_res_object["transport"]["externalMeansOfTransportMode"] = MOT_MAP.get(
+        proj.external_means_of_transport_code or "1"
     )
 
     return proj_res_object
@@ -283,7 +322,9 @@ def get_projects(
         raise frappe.AuthenticationError
 
     if not statuses:
-        statuses = DEFAULT_STATUSES
+        statuses = DEFAULT_LIST_STATUSES
+    else:
+        statuses = json.loads(statuses)
 
     query = """
           SELECT 
@@ -297,6 +338,7 @@ def get_projects(
             proj.eta_or_etd,
             proj.external_means_of_transport,
             proj.external_means_of_transport_code,
+            proj.days_of_free_demurrage_,
             proj.last_day_of_free_demurrage,
             file.file_count,
             'SHIP' as external_mot_mode
@@ -331,10 +373,8 @@ def get_projects(
             house_masters=serialize_in_values(house_masters)
         )
 
-    query += (
-        " ORDER BY proj.expected_start_date DESC limit {start}, {page_length}".format(
-            start=start, page_length=page_length
-        )
+    query += " ORDER BY proj.name ASC, proj.date_of_customs_declaration ASC limit {start}, {page_length}".format(
+        start=start, page_length=page_length
     )
 
     projects = frappe.db.sql(
@@ -345,7 +385,34 @@ def get_projects(
     for e in projects:
         e.external_mot_mode = MOT_MAP.get(e.external_means_of_transport_code, "SHIP")
 
-    return projects
+    agg_query = """
+        SELECT 
+        count(distinct(pu.parent)) as no_of_projects
+        FROM `tabProject User` pu 
+        LEFT JOIN `tabProject` proj ON pu.parent = proj.name
+        WHERE 
+        pu.parenttype="Project" 
+            AND pu.parentfield="users" 
+            AND pu.user="{user}"
+        AND proj.status IN ({statuses})            
+    """.format(user=user, statuses=serialize_in_values(statuses))
+
+    if customers:
+        agg_query += " AND proj.customer IN ({customers})".format(
+            customers=serialize_in_values(customers)
+        )
+
+    if house_masters:
+        agg_query += " AND proj.house_master IN ({house_masters})".format(
+            house_masters=serialize_in_values(house_masters)
+        )
+
+    total_projects = frappe.db.sql(
+        agg_query,
+        as_dict=True,
+    )
+
+    return {"projects": projects, "total": total_projects[0].no_of_projects}
 
 
 @frappe.whitelist()
@@ -402,3 +469,27 @@ def get_project_stats(user=None, customers=None, house_masters=None, statuses=No
     )
 
     return projects
+
+
+@frappe.whitelist()
+def mark_pre_payment(project):
+    if frappe.db.get_value("Project", project, "status") in PRE_STATUS_LIST:
+        frappe.db.set_value("Project", project, "pre_payment_inspection", 1)
+        frappe.db.commit()
+    else:
+        frappe.throw(
+            "Project is not in the correct state to select pre payment inspection.",
+            frappe.ValidationError,
+        )
+
+
+@frappe.whitelist()
+def cancel_mark_pre_payment(project):
+    if frappe.db.get_value("Project", project, "status") in CANCEL_PRE_STATUS_LIST:
+        frappe.db.set_value("Project", project, "pre_payment_inspection", 0)
+        frappe.db.commit()
+    else:
+        frappe.throw(
+            "Project is not in the correct state to cancel pre payment inspection.",
+            frappe.ValidationError,
+        )
