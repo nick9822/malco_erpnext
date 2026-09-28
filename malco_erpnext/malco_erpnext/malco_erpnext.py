@@ -77,39 +77,39 @@ def sign_invoice(doc, method):
                 elif doc.doctype == "Delivery Note":
                         upload_transaction_ts(doc.doctype, doc.name, "MalCo Delivery Note")
 
-@frappe.whitelist()
-def remove_duplicate_tags(project):
-        projdoc = frappe.get_doc("Project", project)
-        html_en = html2text.html2text(projdoc.xml_html)        
-        h = HTMLParser.HTMLParser()
-        xmld = h.unescape(html_en).encode('utf8')
-        root = etree.fromstring(xmld)
-        for crew in root.xpath('.//GOOITEGDS'):
-                i_index = crew.find("IteNumGDS7").text
-                if int(i_index) > 1:
-                        for rcrew in crew.xpath('.//CONNR2'):
-                                rcrew.getparent().remove(rcrew)
-                        for rcrew in crew.xpath('.//TAXADDELE100'):
-                                rcrew.getparent().remove(rcrew)
-                hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
-                for idx, ccrew in enumerate(crew.xpath('.//PRODOCDC2')):
-                        score = 0
-                        vdoc = ccrew.find("DocTypDC21").text
-                        for idxx, e in enumerate(projdoc.customs_attachments):
-                                if e.document_code == vdoc and e.hs_code == hs_code and idx == idxx:
-                                        score = score + 1
-                        if score == 0:
-                                ccrew.getparent().remove(ccrew)
-                for idx, ccrew in enumerate(crew.xpath('.//CALTAXGOD')):
-                        score = 0
-                        vdoc = ccrew.find("TypOfTaxCTX1").text
-                        for idxx, e in enumerate(projdoc.customs_duties_analysis):
-                                if e.customs_charges_code == vdoc and e.hs_code == hs_code and idx == idxx:
-                                        score = score + 1
-                        if score == 0:
-                                ccrew.getparent().remove(ccrew)
-        op = etree.tostring(root, pretty_print=True)
-        return h.unescape(op)
+# @frappe.whitelist()
+# def remove_duplicate_tags(project):
+#         projdoc = frappe.get_doc("Project", project)
+#         html_en = html2text.html2text(projdoc.xml_html)        
+#         h = HTMLParser.HTMLParser()
+#         xmld = h.unescape(html_en).encode('utf8')
+#         root = etree.fromstring(xmld)
+#         for crew in root.xpath('.//GOOITEGDS'):
+#                 i_index = crew.find("IteNumGDS7").text
+#                 if int(i_index) > 1:
+#                         for rcrew in crew.xpath('.//CONNR2'):
+#                                 rcrew.getparent().remove(rcrew)
+#                         for rcrew in crew.xpath('.//TAXADDELE100'):
+#                                 rcrew.getparent().remove(rcrew)
+#                 hs_code = projdoc.commodities_data[int(i_index)-1].hs_code
+#                 for idx, ccrew in enumerate(crew.xpath('.//PRODOCDC2')):
+#                         score = 0
+#                         vdoc = ccrew.find("DocTypDC21").text
+#                         for idxx, e in enumerate(projdoc.customs_attachments):
+#                                 if e.document_code == vdoc and e.hs_code == hs_code and idx == idxx:
+#                                         score = score + 1
+#                         if score == 0:
+#                                 ccrew.getparent().remove(ccrew)
+#                 for idx, ccrew in enumerate(crew.xpath('.//CALTAXGOD')):
+#                         score = 0
+#                         vdoc = ccrew.find("TypOfTaxCTX1").text
+#                         for idxx, e in enumerate(projdoc.customs_duties_analysis):
+#                                 if e.customs_charges_code == vdoc and e.hs_code == hs_code and idx == idxx:
+#                                         score = score + 1
+#                         if score == 0:
+#                                 ccrew.getparent().remove(ccrew)
+#         op = etree.tostring(root, pretty_print=True)
+#         return h.unescape(op)
 
 @frappe.whitelist()
 def remove_duplicate_tags_from_xml(project, xml_html):
@@ -627,18 +627,18 @@ def read_text_file(file_path):
     with io.open(file_path, 'r', encoding="ISO-8859-7") as f:
         return f.read()
 
-@frappe.whitelist()
-def create_xml_file_for_komvos(proj):
-        project = frappe.get_doc("Project", proj)
-        if project.xml_html and project.xml_html != "":
-                html_en = html2text.html2text(project.xml_html)        
-                h = HTMLParser.HTMLParser()
-                xmld = h.unescape(html_en).encode('utf8')
-                with open("xmls_for_komvos_processing/"+project.name+".xml", 'w') as f:
-                        f.write(xmld)
-                frappe.msgprint("XML file created for Komvos processing.")
-        else:
-                frappe.msgprint("XML data is blank, please create xml first.")
+# @frappe.whitelist()
+# def create_xml_file_for_komvos(proj):
+#         project = frappe.get_doc("Project", proj)
+#         if project.xml_html and project.xml_html != "":
+#                 html_en = html2text.html2text(project.xml_html)        
+#                 h = HTMLParser.HTMLParser()
+#                 xmld = h.unescape(html_en).encode('utf8')
+#                 with open("xmls_for_komvos_processing/"+project.name+".xml", 'w') as f:
+#                         f.write(xmld)
+#                 frappe.msgprint("XML file created for Komvos processing.")
+#         else:
+#                 frappe.msgprint("XML data is blank, please create xml first.")
 
 @frappe.whitelist()
 def compare_with_past_expenses(proj):
@@ -684,7 +684,6 @@ def create_xml_file(projname, counter):
         x = CdtXML(projname)
         xml_html = x.startXml()
         frappe.db.set_value("Project", projname, "xml_counter", counter)
-        frappe.db.set_value("Project", projname, "xml_html", xml_html)
         create_xml_file_for_komvos_obj(projname, xml_html)
         return xml_html
 
@@ -693,7 +692,6 @@ def create_xml_file_locally(projname, counter):
         x = CdtXML(projname)
         xml_html = x.startXml()
         frappe.db.set_value("Project", projname, "xml_counter", counter)
-        frappe.db.set_value("Project", projname, "xml_html", xml_html)
         return xml_html
 
 def create_xml_file_for_komvos_obj(projname, xml_html):
