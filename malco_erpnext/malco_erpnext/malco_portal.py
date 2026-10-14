@@ -2,10 +2,19 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 import frappe
+from frappe import _
 import json
+from html2text import unescape, HTML2Text
 from frappe.utils.formatters import format_value
 from frappe.desk.form.load import get_attachments
-
+from collections import OrderedDict
+from frappe.core.doctype.user.user import (
+    test_password_strength,
+    _get_user_for_update_password,
+    handle_password_test_fail,
+    _update_password,
+    reset_user_data,
+)
 
 """
 ASSUMTIONS: Weights are always expressed in KGs.
@@ -79,6 +88,20 @@ DEFAULT_LIST_STATUSES = [
     "Import not Allowed",
 ]
 
+CONTAINER_STATS_STATUSES = [
+    "ETA or ETD",
+    "Expecting Delivery Order or Data",
+    "Under Pre payment Inspection",
+    "Before ICISnet Progress",
+    "Under ICISnet Progress",
+    "Under Customs Control",
+    "Under Balance Payment",
+    "Under Delivery",
+    "Under Destruction",
+    "Completed",
+    "Under Invoicing",
+]
+
 """
 5	ΔΙΑ ΑΓΩΓΟΥ - ΣΤΑΘΕΡΕΣ ΕΓΚΑΤΑΣΤΑΣΕΙΣ
 1	ΑΤΜΟΠΛΟΙΚΩΣ
@@ -134,6 +157,8 @@ CANCEL_PRE_STATUS_LIST = [
 
 
 PRIVILEGED_USERS = ["Administrator", "erpnext@malco.gr", "nmalefakis@malco.gr"]
+
+MALCO_BO = "MALCO BO"
 
 
 def serialize_container(container):
@@ -270,6 +295,11 @@ def get_project(docname):
             or "",
             "freeDemurrageDays": proj.days_of_free_demurrage_ or 0,
             "lastFreeDay": proj.get_formatted("last_day_of_free_demurrage") or "",
+            "dateOfCompleteFolder": proj.get_formatted("date_of_complete_folder") or "",
+            "dateOfEmptyContainerReturn": proj.get_formatted(
+                "date_of_empty_container_return"
+            )
+            or "",
         },
         "commercial": {
             "invoiceNumber": proj.commercial_invoice_number,
@@ -283,6 +313,7 @@ def get_project(docname):
             "totalBillingValue": proj.get_formatted("total_billing_value"),
         },
         "notes": proj.project_notes or "",
+        "draftNotes": proj.draft_notes or "",
         "attachments": [
             serialize_attachment(attachment)
             for attachment in get_attachments(proj.doctype, proj.name)
@@ -307,7 +338,7 @@ def get_projects(
     house_masters=None,
     statuses=None,
     start=0,
-    page_length=10,
+    page_length=20,
 ):
 
     user_authorized = False
@@ -340,6 +371,7 @@ def get_projects(
             proj.external_means_of_transport_code,
             proj.days_of_free_demurrage_,
             proj.last_day_of_free_demurrage,
+            proj.date_of_empty_container_return,
             file.file_count,
             'SHIP' as external_mot_mode
           FROM `tabProject User` pu 
@@ -493,3 +525,330 @@ def cancel_mark_pre_payment(project):
             "Project is not in the correct state to cancel pre payment inspection.",
             frappe.ValidationError,
         )
+
+
+@frappe.whitelist()
+def get_container_stats(user=None, customers=None, house_masters=None, statuses=None):
+
+    user_authorized = False
+
+    if frappe.session.user in PRIVILEGED_USERS:
+        user_authorized = True
+
+    if not user_authorized and user == frappe.session.user:
+        user_authorized = True
+
+    if not user_authorized:
+        raise frappe.AuthenticationError
+
+    if not statuses:
+        statuses = CONTAINER_STATS_STATUSES
+
+    query = """
+            SELECT
+                cd.commodity,
+                cd.container_size,
+                COUNT(*) AS containers,
+                SUM(
+                    CASE
+                        WHEN cd.container_gross_weight REGEXP '^[0-9]+(\\.[0-9]+)?$'
+                        THEN CAST(cd.container_gross_weight AS DECIMAL(18, 2))
+                        ELSE 0
+                    END
+                ) AS gross_weight,
+                proj.status
+            FROM `tabContainer data` cd
+                LEFT JOIN `tabProject User` pu ON pu.parent = cd.parent
+                LEFT JOIN `tabProject` proj ON proj.name = pu.parent
+            WHERE cd.commodity IS NOT NULL
+                AND pu.user="{user}"
+                AND proj.status IN ({statuses})
+        """.format(user=user, statuses=serialize_in_values(statuses))
+
+    if customers:
+        if isinstance(customers, basestring):
+            customers = [customers]
+        query += " AND proj.customer IN ({customers})".format(
+            customers=serialize_in_values(customers)
+        )
+
+    if house_masters:
+        if isinstance(house_masters, basestring):
+            house_masters = [house_masters]
+        query += " AND proj.house_master IN ({house_masters})".format(
+            house_masters=serialize_in_values(house_masters)
+        )
+
+    # Query may need to limit time-horizon but we don't know it yet
+
+    query += " GROUP BY cd.commodity, cd.container_size, proj.status"
+    print(query)
+    projects = frappe.db.sql(
+        query,
+        as_dict=True,
+    )
+
+    grouped = OrderedDict()
+
+    for row in projects:
+        status = row["status"]
+
+        if status == "ETA or ETD":
+            changed_status = "Under Way"
+
+        elif status in (
+            "Expecting Delivery Order or Data",
+            "Under Pre payment Inspection",
+            "Before ICISnet Progress",
+            "Under ICISnet Progress",
+            "Under Customs Control",
+            "Under Balance Payment",
+            "Under Delivery",
+            "Under Destruction",
+        ):
+            changed_status = "Port"
+
+        elif status in ("Completed", "Under Invoicing"):
+            changed_status = "Completed"
+
+        else:
+            changed_status = status
+
+        key = (changed_status, row["commodity"])
+
+        if key not in grouped:
+            grouped[key] = OrderedDict(
+                [
+                    ("status", changed_status),
+                    ("commodity", row["commodity"]),
+                    ("gross_weight", 0),
+                    ("containers", 0),
+                    ('20" Containers', 0),
+                    ('40" Containers', 0),
+                ]
+            )
+
+        item = grouped[key]
+
+        gross_weight = row.get("gross_weight") or 0
+        containers = row.get("containers") or 0
+
+        item["gross_weight"] += gross_weight
+        item["containers"] += containers
+
+        if row["container_size"] == '20"':
+            item['20" Containers'] += containers
+        elif row["container_size"] == '40"':
+            item['40" Containers'] += containers
+
+    status_order = {
+        "Under Way": 0,
+        "Port": 1,
+        "Completed": 2,
+    }
+
+    return sorted(
+        grouped.values(), key=lambda item: status_order.get(item["status"], 99)
+    )
+
+
+@frappe.whitelist(allow_guest=True)
+def reset_password(user):
+    if user == "Administrator":
+        return "not allowed"
+
+    try:
+        user = frappe.get_doc("User", user)
+        if not user.enabled:
+            return "disabled"
+        user.validate_reset_password()
+        link = user.reset_password(send_email=False)
+        link = link.replace("https://erp.malco.gr", "https://portal.malco.gr")
+        user.send_login_mail(
+            _("Password Reset"),
+            "password_reset",
+            {"link": link, "login_url": "https://portal.malco.gr"},
+            now=True,
+        )
+        return "OK"
+
+    except frappe.DoesNotExistError:
+        frappe.clear_messages()
+        return "not found"
+
+
+@frappe.whitelist(allow_guest=True)
+def update_password(new_password, key=None, old_password=None):
+    # raise ValueError(unescape(new_password), key, old_password)
+    new_password = unescape(new_password)
+    result = test_password_strength(new_password)
+    feedback = result.get("feedback", None)
+
+    if feedback and not feedback.get("password_policy_validation_passed", False):
+        handle_password_test_fail(result)
+
+    res = _get_user_for_update_password(key, old_password)
+    if res.get("message"):
+        return res["message"]
+    else:
+        user = res["user"]
+
+    _update_password(user, new_password)
+    reset_user_data(user)
+
+    return "OK"
+
+
+@frappe.whitelist()
+def project_activity_scheduler():
+    last_synced_version = frappe.db.sql(
+        "select version, timestamp from `tabProject Activity` order by timestamp desc limit 1",
+        as_dict=True,
+    )
+    if len(last_synced_version) == 0:
+        return
+    last_version = frappe.db.sql(
+        "select name from `tabVersion` WHERE creation >= '{timestamp}' order by creation desc limit 1".format(
+            timestamp=last_synced_version[0].timestamp
+        ),
+        as_dict=True,
+    )
+    if last_synced_version[0].version == last_version[0].name:
+        return
+
+    sync_project_activity(
+        timestamp=last_synced_version[0].timestamp,
+        last_version=last_synced_version[0].version,
+    )
+
+
+def sync_project_activity(interval=None, timestamp=None, last_version=None):
+    versions = []
+    if interval:
+        versions = frappe.db.sql(
+            """select name, docname, data, creation from `tabVersion` WHERE creation >= NOW() - INTERVAL {interval} DAY and ref_doctype='Project' order by creation desc""".format(
+                interval=interval
+            ),
+            as_dict=True,
+        )
+    elif timestamp:
+        versions = frappe.db.sql(
+            """select name, docname, data, creation from `tabVersion` WHERE creation >= '{timestamp}' and ref_doctype='Project' order by creation desc""".format(
+                timestamp=timestamp
+            ),
+            as_dict=True,
+        )
+    else:
+        return
+
+    last_version_check = bool(last_version)
+    print("version check is ", last_version_check)
+
+    for e in versions:
+        if "status" in e.data:
+            if (
+                last_version_check
+                and len(
+                    frappe.get_list(
+                        "Project Activity", filters=[["version", "=", e.name]]
+                    )
+                )
+                > 0
+            ):
+                print(
+                    "last version checked and record skipped {version}".format(
+                        version=last_version
+                    )
+                )
+                last_version_check = False
+                continue
+            json_data = json.loads(e.data)
+            for ee in json_data.get("changed", []):
+                if ee[0] == "status":
+                    pa = frappe.new_doc("Project Activity")
+                    if e.docname:
+                        pa.project = e.docname
+                        users = frappe.db.sql(
+                            """
+                            select user from `tabProject User` where parent="{project}"
+                            """.format(project=e.docname),
+                            as_dict=True,
+                        )
+                        if len(users) == 0:
+                            break
+                        pa.users = ",".join([x.user.lower() for x in users])
+                        pa.activity_type = "Status Change"
+                        pa.old_value = ee[1] or ""
+                        pa.new_value = ee[2] or ""
+                        pa.timestamp = e.creation
+                        pa.version = e.name
+                        pa.insert()
+                    else:
+                        break
+    frappe.db.commit()
+
+
+@frappe.whitelist()
+def get_project_activities(user=None, statuses=None, start=0, page_length=10):
+    if not user:
+        raise frappe.ValidationError
+
+    user_authorized = False
+
+    if frappe.session.user in PRIVILEGED_USERS:
+        user_authorized = True
+
+    if not user_authorized and user == frappe.session.user:
+        user_authorized = True
+
+    if not user_authorized:
+        raise frappe.AuthenticationError
+
+    if not statuses:
+        statuses = DEFAULT_LIST_STATUSES
+    else:
+        statuses = json.loads(statuses)
+
+    query = """
+          SELECT 
+            activity.project,
+            activity.activity_type,
+            activity.old_value,
+            activity.new_value,
+            activity.timestamp
+          FROM `tabProject Activity` activity
+          WHERE 
+            activity.users LIKE "%{user}%" AND
+            activity.timestamp >= NOW() - INTERVAL 7 DAY
+          ORDER BY
+            activity.timestamp DESC
+        """.format(user=user.lower())
+
+    query += " limit {start}, {page_length}".format(
+        start=start, page_length=page_length
+    )
+
+    activities = frappe.db.sql(
+        query,
+        as_dict=True,
+    )
+
+    result = []
+
+    for activity in activities:
+        new_value = activity.new_value
+        old_value = activity.old_value
+
+        new_valid = new_value in statuses
+        old_valid = old_value in statuses
+
+        # Keep the valid status and mask the internal one
+        if not new_valid:
+            activity.old_value = MALCO_BO
+
+        if not old_valid:
+            activity.new_value = MALCO_BO
+
+        result.append(activity)
+
+    return result
