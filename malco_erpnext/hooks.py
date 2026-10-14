@@ -97,7 +97,7 @@ doc_events = {
     },
     "Project": {
         "before_save": "malco_erpnext.malco_erpnext.malco_erpnext.proj_calculate"
-    }
+    },
     # "Delivery Note": {
     #     "on_submit": "malco_erpnext.malco_erpnext.malco_erpnext.sign_invoice"
     # }
@@ -113,6 +113,7 @@ scheduler_events = {
         "malco_erpnext.malco_erpnext.malco_erpnext.parse_komvas_output_files",
         "malco_erpnext.malco_erpnext.malco_erpnext.parse_icis_output_xml_files",
         "malco_erpnext.malco_erpnext.malco_erpnext.move_icis_files_to_projects",
+        "malco_erpnext.malco_erpnext.malco_portal.project_activity_scheduler",
     ],
 }
 # scheduler_events = {
