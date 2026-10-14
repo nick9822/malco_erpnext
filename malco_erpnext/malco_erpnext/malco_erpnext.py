@@ -796,11 +796,10 @@ def move_icis_files_to_projects():
                 os.chdir(path)
                 if file.endswith(".pdf") and os.path.isfile(file):
                         file_path = path + "/"+ file
-                        print(file_path)
                         proj_name = file.split("-")[0]
                         try:
                                 shutil.move(file_path, move_path+ "/"+ file)
-                                save_url("https://malco.gr/files/"+file, file, "Project", proj_name, "Home/Attachments", False)
+                                save_url("https://erp.malco.gr/files/"+file, file, "Project", proj_name, "Home/Attachments", False)
                                 frappe.db.commit()
                         except Exception as e:
                                 print(e)
@@ -809,8 +808,8 @@ def move_icis_files_to_projects():
 @frappe.whitelist()
 def copy_files_to_icisnet(files, mrn):
         copy_path = "/home/frappe/frappe-bench/sites/upload_icisnet/"
-        public_path = "/home/frappe/frappe-bench/sites/malco.gr/public"
-        private_path = "/home/frappe/frappe-bench/sites/malco.gr/private"
+        public_path = "/home/frappe/frappe-bench/sites/erp.malco.gr/public"
+        private_path = "/home/frappe/frappe-bench/sites/erp.malco.gr/private"
         files  = json.loads(files)
 
         for e in files:
