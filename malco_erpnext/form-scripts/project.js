@@ -7323,7 +7323,13 @@ frappe.ui.form.on("Project", "before_save", function (frm, cdt, cdn) {
             throw new Error("unable to save");
         }
     }
-    console.log("reaching herer...");
+
+    const hasDuplicateUsers = new Set(frm.doc.users.map(p => p.user)).size !== frm.doc.users.length;
+    if (hasDuplicateUsers) {
+        frappe.msgprint("<h2 style='color: red;'>There are duplicate users in the Users table. Please go back and correct it. <h2>")
+        throw new Error("unable to save");
+    }
+
 });
 
 frappe.ui.form.on("Project", "eta_or_etd", function (frm, cdt, cdn) {
