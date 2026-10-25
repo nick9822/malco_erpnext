@@ -295,3 +295,24 @@ frappe.ui.form.on("Sales Invoice", "close_projects", function (frm, cdt, cdn) {
         frappe.throw("No projects in this combined invoice.");
     }
 });
+
+frappe.ui.form.on("Sales Invoice", "sync_document_numbers", function (frm, cdt, cdn) {
+    var p = frm.doc;
+
+    frappe.call({
+        "method": "malco_erpnext.malco_erpnext.malco_erpnext.sync_document_numbers",
+        args: {
+            docname: p.name,
+        },
+        freeze: true,
+        callback: function (data) {
+            console.log(data);
+            if (data.message == "OK") {
+                frappe.msgprint("Sync complete, refresh the page if you don't see updates.");
+            } else {
+                frappe.msgprint("Sync complete, all up to date");
+            }
+        }
+    })
+
+});
